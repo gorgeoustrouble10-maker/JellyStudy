@@ -28,9 +28,9 @@ Write-Host "`n=== 5. evaluate-2 双实例 (8085) ===" -ForegroundColor Cyan
 try {
     $r2 = Invoke-RestMethod "http://127.0.0.1:8085/api/evaluations/instance-info" -TimeoutSec 5
     $r2 | ConvertTo-Json -Compress
-} catch { Write-Host "  8085 未启动（Docker: docker compose up -d；本地: start-full-stack.ps1）" }
+} catch { Write-Host "  8085 not running (Docker: docker compose up -d; local: start-full-stack.ps1)" }
 
-Write-Host "`n=== 6. 深度健康检查 (components) ===" -ForegroundColor Cyan
+Write-Host "`n=== 6. Deep health check (components) ===" -ForegroundColor Cyan
 @(
     @{ name = "knowledge"; url = "http://127.0.0.1:8081/api/health" },
     @{ name = "qa"; url = "http://127.0.0.1:8082/api/health" },
@@ -45,4 +45,4 @@ Write-Host "`n=== 6. 深度健康检查 (components) ===" -ForegroundColor Cyan
     } catch { Write-Warning "  $($_.name) health failed" }
 }
 
-Write-Host "`n提示: Docker 全栈 docker compose up -d | 本地 start-full-stack.ps1 (Gateway dual)" -ForegroundColor Yellow
+Write-Host "`nTip: Docker stack = docker compose up -d | Local dual Gateway = start-full-stack.ps1" -ForegroundColor Yellow
