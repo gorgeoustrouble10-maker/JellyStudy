@@ -2,6 +2,8 @@
 
 学号 **32308117** · 吕宇轩
 
+**在线仓库**：https://github.com/gorgeoustrouble10-maker/JellyStudy
+
 基于 **Spring Boot 微服务 + Dubbo + Redis + MongoDB + RabbitMQ + 通义千问** 的全栈学习平台，含 **JellyCoach 智能成长教练**（AI 学情、宠物、苏格拉底、周报可视化）。
 
 ---
