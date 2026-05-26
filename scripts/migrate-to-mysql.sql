@@ -1,0 +1,2 @@
+-- 已有 MySQL 容器、但未执行过 init-database.sql 时，在项目根目录执行：
+-- Get-Content init-database.sql | docker exec -i jellystudy-mysql mysql -uroot -p123456

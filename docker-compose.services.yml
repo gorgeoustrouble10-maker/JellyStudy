@@ -1,0 +1,169 @@
+# JellyStudy 微服务 Docker 全栈（五服务 + Gateway + evaluate 双实例 + SkyWalking Agent）
+# 前置：mvn -f jellystudy-parent/pom.xml package -DskipTests
+# 推荐：docker compose up -d --build
+# 或：  start-docker-services.bat
+
+x-java-env: &java-env
+  MYSQL_HOST: mysql
+  MYSQL_PORT: 3306
+  MYSQL_USER: root
+  MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456}
+  REDIS_HOST: redis
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-jellystudy_redis}
+  NACOS_HOST: nacos
+  NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+  NACOS_PASSWORD: ${NACOS_PASSWORD:-nacos}
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+  SW_AGENT_COLLECTOR_BACKEND_SERVICES: skywalking-oap:11800
+  SW_AGENT_ENABLED: "true"
+  DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+
+x-java-depends: &java-depends
+  mysql:
+    condition: service_started
+  redis:
+    condition: service_started
+  nacos:
+    condition: service_started
+  skywalking-oap:
+    condition: service_healthy
+
+services:
+  knowledge:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.jvm-service
+      args:
+        SERVICE_JAR: jellystudy-parent/jellystudy-knowledge/target/jellystudy-knowledge-1.0.0-SNAPSHOT.jar
+    container_name: jellystudy-knowledge
+    restart: unless-stopped
+    environment:
+      <<: *java-env
+      SERVER_PORT: 8081
+      DUBBO_PROTOCOL_PORT: 50051
+      SW_AGENT_NAME: jellystudy-knowledge
+    ports:
+      - "8081:8081"
+      - "50051:50051"
+    depends_on:
+      <<: *java-depends
+
+  qa:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.jvm-service
+      args:
+        SERVICE_JAR: jellystudy-parent/jellystudy-qa/target/jellystudy-qa-1.0.0-SNAPSHOT.jar
+    container_name: jellystudy-qa
+    restart: unless-stopped
+    environment:
+      <<: *java-env
+      SERVER_PORT: 8082
+      DUBBO_PROTOCOL_PORT: 50052
+      SW_AGENT_NAME: jellystudy-qa
+    ports:
+      - "8082:8082"
+      - "50052:50052"
+    depends_on:
+      <<: *java-depends
+
+  evaluate-1:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.jvm-service
+      args:
+        SERVICE_JAR: jellystudy-parent/jellystudy-evaluate-service/target/jellystudy-evaluate-service-1.0.0-SNAPSHOT.jar
+    container_name: jellystudy-evaluate-1
+    restart: unless-stopped
+    environment:
+      <<: *java-env
+      INSTANCE_ID: evaluate-1
+      SERVER_PORT: 8083
+      DUBBO_PROTOCOL_PORT: 50053
+      SW_AGENT_NAME: jellystudy-evaluate-1
+    ports:
+      - "8083:8083"
+      - "50053:50053"
+    depends_on:
+      <<: *java-depends
+      rabbitmq:
+        condition: service_started
+
+  evaluate-2:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.jvm-service
+      args:
+        SERVICE_JAR: jellystudy-parent/jellystudy-evaluate-service/target/jellystudy-evaluate-service-1.0.0-SNAPSHOT.jar
+    container_name: jellystudy-evaluate-2
+    restart: unless-stopped
+    environment:
+      <<: *java-env
+      INSTANCE_ID: evaluate-2
+      SERVER_PORT: 8085
+      DUBBO_PROTOCOL_PORT: 50055
+      SW_AGENT_NAME: jellystudy-evaluate-2
+    ports:
+      - "8085:8085"
+      - "50055:50055"
+    depends_on:
+      <<: *java-depends
+      rabbitmq:
+        condition: service_started
+
+  coach:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.jvm-service
+      args:
+        SERVICE_JAR: jellystudy-parent/jellystudy-coach-service/target/jellystudy-coach-service-1.0.0-SNAPSHOT.jar
+    container_name: jellystudy-coach
+    restart: unless-stopped
+    environment:
+      <<: *java-env
+      SERVER_PORT: 8084
+      DUBBO_PROTOCOL_PORT: 50054
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      SW_AGENT_NAME: jellystudy-coach
+    ports:
+      - "8084:8084"
+      - "50054:50054"
+    depends_on:
+      <<: *java-depends
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+
+  gateway:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.jvm-service
+      args:
+        SERVICE_JAR: jellystudy-parent/jellystudy-gateway/target/jellystudy-gateway-1.0.0-SNAPSHOT.jar
+    container_name: jellystudy-gateway
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SW_AGENT_NAME: jellystudy-gateway
+      SW_AGENT_COLLECTOR_BACKEND_SERVICES: skywalking-oap:11800
+      SW_AGENT_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      knowledge:
+        condition: service_started
+      qa:
+        condition: service_started
+      evaluate-1:
+        condition: service_started
+      evaluate-2:
+        condition: service_started
+      coach:
+        condition: service_started
+      skywalking-oap:
+        condition: service_healthy

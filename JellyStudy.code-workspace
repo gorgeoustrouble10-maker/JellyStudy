@@ -1,0 +1,27 @@
+{
+  "folders": [
+    {
+      "name": "JellyStudy (root)",
+      "path": "."
+    },
+    {
+      "name": "jellystudy-parent (Java)",
+      "path": "jellystudy-parent"
+    }
+  ],
+  "settings": {
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.jdt.lombokSupport.enabled": true,
+    "java.import.maven.enabled": true,
+    "maven.executable.path": "${workspaceFolder:JellyStudy (root)}/tools/apache-maven-3.9.6/bin/mvn.cmd",
+    "java.import.exclusions": [
+      "**/node_modules/**",
+      "**/frontend/**",
+      "**/tools/**",
+      "**/skywalking-agent/**"
+    ]
+  },
+  "extensions": {
+    "recommendations": ["vscjava.vscode-java-pack"]
+  }
+}

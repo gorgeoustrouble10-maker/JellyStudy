@@ -1,0 +1,8 @@
+# JellyStudy 唯一推荐 Docker 入口（基础设施 + 微服务全栈）
+# 启动: docker compose up -d --build
+# 停止: docker compose down
+# 说明: 旧版 docker-compose.yml（仅 MySQL:3306）已废弃，请使用本文件
+
+include:
+  - path: docker-compose.core.yml
+  - path: docker-compose.services.yml

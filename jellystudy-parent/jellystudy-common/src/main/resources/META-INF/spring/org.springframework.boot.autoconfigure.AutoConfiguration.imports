@@ -1,0 +1,16 @@
+com.jellystudy.common.auth.JellystudyAuthAutoConfiguration
+
+com.jellystudy.common.config.JellystudySecurityAutoConfiguration
+
+com.jellystudy.common.config.JellystudyCorsAutoConfiguration
+
+com.jellystudy.common.config.JellystudyHealthAutoConfiguration
+
+com.jellystudy.common.config.DataSourceHealthProbeAutoConfiguration
+
+com.jellystudy.common.config.RedisHealthProbeAutoConfiguration
+
+com.jellystudy.common.config.MongoHealthProbeAutoConfiguration
+
+com.jellystudy.common.config.RabbitHealthProbeAutoConfiguration
+

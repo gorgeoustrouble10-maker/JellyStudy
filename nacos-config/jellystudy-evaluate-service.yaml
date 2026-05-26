@@ -1,0 +1,9 @@
+# Nacos 配置 — jellystudy-evaluate-service.yaml
+# Group: DEFAULT_GROUP  |  导入: scripts/import-nacos-config.ps1
+
+evaluate:
+  model:
+    type: qianwen
+    model-name: qwen-turbo
+    timeout: 60000
+    retry-count: 3

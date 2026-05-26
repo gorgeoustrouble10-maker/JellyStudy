@@ -1,0 +1,108 @@
+# 核心基础设施（不含 SkyWalking，体积小、启动快）
+# 用法: docker compose -f docker-compose.core.yml up -d
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: jellystudy-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-123456}
+      MYSQL_DATABASE: jellystudy_evaluate
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./init-database.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - jellystudy-mysql-data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: jellystudy-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "true"
+      NACOS_CORE_AUTH_ENABLED: "true"
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-SecretKey012345678901234567890123456789012345678901234567890123456789}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:-serverIdentity}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:-security}
+      PREFER_HOST_MODE: hostname
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/readiness"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  redis:
+    image: redis:7-alpine
+    container_name: jellystudy-redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-jellystudy_redis}
+    ports:
+      - "6379:6379"
+    volumes:
+      - jellystudy-redis-data:/data
+    command: >
+      sh -c "redis-server --appendonly yes --requirepass $$REDIS_PASSWORD"
+
+  mongodb:
+    image: mongo:7
+    container_name: jellystudy-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - jellystudy-mongo-data:/data/db
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: jellystudy-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+
+  skywalking-oap:
+    image: apache/skywalking-oap-server:9.7.0
+    container_name: jellystudy-skywalking-oap
+    restart: unless-stopped
+    environment:
+      SW_STORAGE: h2
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+    ports:
+      - "11800:11800"
+      - "12800:12800"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:12800/internal/l7check || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+
+  skywalking-ui:
+    image: apache/skywalking-ui:9.7.0
+    container_name: jellystudy-skywalking-ui
+    restart: unless-stopped
+    environment:
+      SW_OAP_ADDRESS: http://skywalking-oap:12800
+    ports:
+      - "8090:8080"
+    depends_on:
+      skywalking-oap:
+        condition: service_healthy
+
+volumes:
+  jellystudy-mysql-data:
+  jellystudy-redis-data:
+  jellystudy-mongo-data:

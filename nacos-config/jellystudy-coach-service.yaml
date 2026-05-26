@@ -1,0 +1,12 @@
+# Nacos 配置 — jellystudy-coach-service.yaml
+# Group: DEFAULT_GROUP  |  导入: scripts/import-nacos-config.ps1
+
+coach:
+  growth:
+    daily-goal-count: 3
+    points-per-task: 10
+    points-high-score: 5
+    streak-bonus: 50
+  model:
+    model-name: qwen-turbo
+    timeout: 60000

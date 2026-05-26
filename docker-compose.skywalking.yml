@@ -1,0 +1,24 @@
+# SkyWalking OAP + UI（在 core 已启动后执行）
+# docker compose -f docker-compose.skywalking.yml up -d
+# UI: http://localhost:8090
+
+services:
+  skywalking-oap:
+    image: apache/skywalking-oap-server:9.7.0
+    container_name: jellystudy-skywalking-oap
+    environment:
+      SW_STORAGE: h2
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+    ports:
+      - "11800:11800"
+      - "12800:12800"
+
+  skywalking-ui:
+    image: apache/skywalking-ui:9.7.0
+    container_name: jellystudy-skywalking-ui
+    environment:
+      SW_OAP_ADDRESS: http://skywalking-oap:12800
+    ports:
+      - "8090:8080"
+    depends_on:
+      - skywalking-oap

@@ -1,0 +1,8 @@
+# 已废弃 — 请使用项目根目录 docker-compose.yml（含 MongoDB/RabbitMQ/全微服务）
+# Deprecated: use docker-compose.yml instead.
+#
+# 旧命令: docker compose -f docker-compose.core.yml up -d
+# 新命令: docker compose up -d
+
+include:
+  - path: docker-compose.core.yml

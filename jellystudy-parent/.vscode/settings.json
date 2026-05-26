@@ -1,0 +1,6 @@
+{
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.jdt.lombokSupport.enabled": true,
+    "java.import.maven.enabled": true,
+    "java.maven.downloadSources": true
+}

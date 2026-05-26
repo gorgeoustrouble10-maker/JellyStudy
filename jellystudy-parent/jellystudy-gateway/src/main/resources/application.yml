@@ -1,0 +1,104 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: jellystudy-gateway
+  cloud:
+    discovery:
+      client:
+        simple:
+          instances:
+            jellystudy-evaluate:
+              - uri: http://127.0.0.1:8083
+                instance-id: evaluate-1
+    gateway:
+      # 开发环境：下游服务在本机固定端口（与 start-java-services.ps1 一致）
+      routes:
+        - id: knowledge-api
+          uri: http://127.0.0.1:8081
+          predicates:
+            - Path=/api/knowledge-points/**
+
+        - id: qa-questions
+          uri: http://127.0.0.1:8082
+          predicates:
+            - Path=/api/questions/**
+
+        - id: qa-answers
+          uri: http://127.0.0.1:8082
+          predicates:
+            - Path=/api/answers/**
+
+        - id: evaluate-api
+          uri: lb://jellystudy-evaluate
+          predicates:
+            - Path=/api/evaluations/**
+
+        - id: coach-api
+          uri: http://127.0.0.1:8084
+          predicates:
+            - Path=/api/coach/**
+
+        - id: auth-api
+          uri: http://127.0.0.1:8084
+          predicates:
+            - Path=/api/auth/**
+
+        - id: health-coach
+          uri: http://127.0.0.1:8084
+          predicates:
+            - Path=/api/health/coach
+          filters:
+            - RewritePath=/api/health/coach, /api/health
+
+        - id: health-knowledge
+          uri: http://127.0.0.1:8081
+          predicates:
+            - Path=/api/health/knowledge
+          filters:
+            - RewritePath=/api/health/knowledge, /api/health
+
+        - id: health-qa
+          uri: http://127.0.0.1:8082
+          predicates:
+            - Path=/api/health/qa
+          filters:
+            - RewritePath=/api/health/qa, /api/health
+
+        - id: health-evaluate
+          uri: lb://jellystudy-evaluate
+          predicates:
+            - Path=/api/health/evaluate
+          filters:
+            - RewritePath=/api/health/evaluate, /api/health
+
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://127.0.0.1:9945"
+              - "http://localhost:9945"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    gateway:
+      enabled: true
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
+
+# Gateway 鉴权（默认关闭，本地开发零配置）
+jellystudy:
+  gateway:
+    auth:
+      enabled: ${JELLYSTUDY_GATEWAY_AUTH_ENABLED:false}
+      api-key: ${JELLYSTUDY_GATEWAY_API_KEY:}
+      header-name: X-API-Key

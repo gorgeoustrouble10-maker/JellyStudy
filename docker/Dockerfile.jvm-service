@@ -1,0 +1,24 @@
+# 通用 Java 微服务镜像（含 SkyWalking Agent，build context = 项目根目录）
+# 用法: docker compose build evaluate-1
+ARG SW_AGENT_VERSION=9.1.0
+FROM eclipse-temurin:17-jre-alpine AS runtime
+
+ARG SERVICE_JAR
+ARG SW_AGENT_VERSION
+
+RUN apk add --no-cache curl tar \
+    && curl -fsSL "https://archive.apache.org/dist/skywalking/java-agent/${SW_AGENT_VERSION}/apache-skywalking-java-agent-${SW_AGENT_VERSION}.tgz" \
+    | tar -xz -C /opt \
+    && mv "/opt/skywalking-agent" /skywalking-agent \
+    && apk del curl tar
+
+WORKDIR /app
+COPY ${SERVICE_JAR} app.jar
+COPY docker/entrypoint-java.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENV APP_JAR=/app/app.jar
+ENV SW_AGENT_ENABLED=true
+ENV SW_AGENT_COLLECTOR_BACKEND_SERVICES=skywalking-oap:11800
+
+ENTRYPOINT ["/entrypoint.sh"]

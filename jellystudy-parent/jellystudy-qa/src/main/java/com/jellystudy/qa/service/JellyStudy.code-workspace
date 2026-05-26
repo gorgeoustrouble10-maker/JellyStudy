@@ -1,0 +1,31 @@
+{
+	"folders": [
+		{
+			"path": "../../../../../../../../.."
+		}
+	],
+	"settings": {
+		"java.configuration.updateBuildConfiguration": "automatic",
+		"java.compile.nullAnalysis.mode": "disabled",
+		"java.import.maven.enabled": true,
+		"java.maven.downloadSources": true,
+		"java.eclipse.downloadSources": true,
+		"java.configuration.maven.notCoveredPluginExecutionSeverity": "ignore",
+		"java.configuration.checkProjectSettingsExclusions": false,
+		"java.import.exclusions": [
+			"**/node_modules/**",
+			"**/frontend/**",
+			"**/tools/**",
+			"**/skywalking-agent/**",
+			"**/logs/**"
+		],
+		"java.project.resourceFilters": [
+			"node_modules",
+			".git",
+			"frontend",
+			"tools",
+			"logs",
+			"skywalking-agent"
+		]
+	}
+}

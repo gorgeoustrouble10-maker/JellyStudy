@@ -1,0 +1,52 @@
+# Build
+**/target/
+tools/apache-maven-*/
+deploy-docker.log
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+*.iml
+
+# Secrets (never commit API keys)
+local-secrets.bat
+.env
+.env.local
+
+# Logs & temp
+*.log
+logs/
+evaluate-output.txt
+evaluate-error.txt
+derby.log
+
+# Old / duplicate projects (root-level folders only)
+/jellystudy/
+/32308117_jellystudy/
+
+# Installers & tools (not source)
+*.msi
+tools/
+
+# Agent logs & binary agent (use scripts/download-skywalking-agent.ps1)
+skywalking-agent/
+skywalking-agent/logs/
+
+# Temp / inspect / office lock files
+_zip_inspect_temp/
+~$*
+*.tmp
+
+# Large submission artifacts (optional; keep in zip for course)
+32308117*.pdf
+32308117-*.pdf
+*.docx
+*.pptx
+
+# Package output
+32308117_jellystudy_temp/
+32308117_jellystudy.zip
+32308117_jellystudy/
+.DS_Store
+Thumbs.db

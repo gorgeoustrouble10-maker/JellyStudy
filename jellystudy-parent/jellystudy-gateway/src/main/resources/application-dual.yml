@@ -1,0 +1,14 @@
+# Gateway 双评估实例负载均衡（Docker evaluate-1:8083 + evaluate-2:8085）
+# 启动：set SPRING_PROFILES_ACTIVE=dual 后启动 Gateway，或 docker compose 全栈时使用
+
+spring:
+  cloud:
+    discovery:
+      client:
+        simple:
+          instances:
+            jellystudy-evaluate:
+              - uri: http://127.0.0.1:8083
+                instance-id: evaluate-1
+              - uri: http://127.0.0.1:8085
+                instance-id: evaluate-2

@@ -1,0 +1,80 @@
+# Docker Compose 全栈：服务间通过容器名通信 + evaluate 双实例负载
+spring:
+  cloud:
+    discovery:
+      client:
+        simple:
+          instances:
+            jellystudy-evaluate:
+              - uri: http://evaluate-1:8083
+                instance-id: evaluate-1
+              - uri: http://evaluate-2:8085
+                instance-id: evaluate-2
+    gateway:
+      routes:
+        - id: knowledge-api
+          uri: http://knowledge:8081
+          predicates:
+            - Path=/api/knowledge-points/**
+
+        - id: qa-questions
+          uri: http://qa:8082
+          predicates:
+            - Path=/api/questions/**
+
+        - id: qa-answers
+          uri: http://qa:8082
+          predicates:
+            - Path=/api/answers/**
+
+        - id: evaluate-api
+          uri: lb://jellystudy-evaluate
+          predicates:
+            - Path=/api/evaluations/**
+
+        - id: coach-api
+          uri: http://coach:8084
+          predicates:
+            - Path=/api/coach/**
+
+        - id: auth-api
+          uri: http://coach:8084
+          predicates:
+            - Path=/api/auth/**
+
+        - id: health-coach
+          uri: http://coach:8084
+          predicates:
+            - Path=/api/health/coach
+          filters:
+            - RewritePath=/api/health/coach, /api/health
+
+        - id: health-knowledge
+          uri: http://knowledge:8081
+          predicates:
+            - Path=/api/health/knowledge
+          filters:
+            - RewritePath=/api/health/knowledge, /api/health
+
+        - id: health-qa
+          uri: http://qa:8082
+          predicates:
+            - Path=/api/health/qa
+          filters:
+            - RewritePath=/api/health/qa, /api/health
+
+        - id: health-evaluate
+          uri: lb://jellystudy-evaluate
+          predicates:
+            - Path=/api/health/evaluate
+          filters:
+            - RewritePath=/api/health/evaluate, /api/health
+
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://127.0.0.1:9945"
+              - "http://localhost:9945"
+            allowedMethods: "*"
+            allowedHeaders: "*"
