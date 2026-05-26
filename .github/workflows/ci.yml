@@ -24,17 +24,12 @@ jobs:
         working-directory: jellystudy-parent
         run: mvn -B clean install -DskipTests
 
-      - name: Coach unit tests
+      - name: Backend unit tests
         working-directory: jellystudy-parent
-        run: mvn -B test -pl jellystudy-coach-service -am "-Dtest=KnowledgeMasteryBuilderTest,AuthTokenStoreTest"
-
-      - name: QA unit tests
-        working-directory: jellystudy-parent
-        run: mvn -B test -pl jellystudy-qa -am "-Dtest=QuestionRankScoringTest"
-
-      - name: Common unit tests
-        working-directory: jellystudy-parent
-        run: mvn -B test -pl jellystudy-common -am "-Dtest=JellystudyBearerWriteAuthFilterTest,ApiKeyAuthFilterTest"
+        run: |
+          mvn -B test -pl jellystudy-common -Dtest=JellystudyBearerWriteAuthFilterTest,ApiKeyAuthFilterTest
+          mvn -B test -pl jellystudy-coach-service -Dtest=KnowledgeMasteryBuilderTest,AuthTokenStoreTest
+          mvn -B test -pl jellystudy-qa -Dtest=QuestionRankScoringTest
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
