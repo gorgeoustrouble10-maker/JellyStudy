@@ -60,6 +60,27 @@ public class CoachRedisCache {
         redisTemplate.delete(key);
     }
 
+    /** 完成 AI 推荐任务后标记对应薄弱点任务为已完成 */
+    public void markTaskCompleted(String userId, String weakPoint) {
+        if (userId == null || userId.isBlank() || weakPoint == null || weakPoint.isBlank()) {
+            return;
+        }
+        List<DailyTaskDTO> tasks = getTodayTasks(userId);
+        if (tasks == null || tasks.isEmpty()) {
+            return;
+        }
+        boolean changed = false;
+        for (DailyTaskDTO task : tasks) {
+            if (weakPoint.equals(task.getWeakPoint()) && !task.isCompleted()) {
+                task.setCompleted(true);
+                changed = true;
+            }
+        }
+        if (changed) {
+            cacheTodayTasks(userId, tasks);
+        }
+    }
+
     /**
      * 真实每日打卡：同一天内多次练习只计 1 次；必须跨自然日且连续才累加 streak。
      */

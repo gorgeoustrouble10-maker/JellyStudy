@@ -291,10 +291,13 @@ public class CoachServiceImpl implements ICoachService {
         profile.setTotalPoints(profile.getTotalPoints() + earned);
         profile.setUpdatedAt(new Date());
         growthProfileRepository.save(profile);
-        coachRedisCache.recordDailyCheckIn(owner);
+        DailyCheckInResult checkIn = coachRedisCache.recordDailyCheckIn(owner);
+        coachRedisCache.markTaskCompleted(owner, quiz.getWeakPoint());
         coachRedisCache.updateLeaderboard(owner, profile.getTotalPoints());
 
-        return toQuizDto(quiz);
+        AiQuizDTO dto = toQuizDto(quiz);
+        dto.setCheckInMessage(checkIn.getMessage());
+        return dto;
     }
 
     @Override

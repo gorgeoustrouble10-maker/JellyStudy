@@ -162,7 +162,7 @@ const saveQuestion = async () => {
  }
  const created = response.data?.data ?? response.data;
  closeModal();
- await fetchQuestions();
+ await switchFilter(activeFilter.value);
  }
  catch (err) {
  alert('保存失败: ' + (err.response?.data?.message || err.message));

@@ -24,4 +24,6 @@ public class AiQuizDTO implements Serializable {
     private String feedback;
     private String status;
     private Date createdAt;
+    /** 提交练习后的打卡提示（可选） */
+    private String checkInMessage;
 }

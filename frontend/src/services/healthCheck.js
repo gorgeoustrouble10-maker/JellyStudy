@@ -3,10 +3,10 @@ import axios from 'axios'
 const client = axios.create({ timeout: 4000 })
 
 const SERVICE_CHECKS = [
-  { key: 'knowledge', url: '/api/health/knowledge', label: '知识点 8081' },
-  { key: 'qa', url: '/api/health/qa', label: '问答 8082' },
-  { key: 'evaluate', url: '/api/health/evaluate', label: '评估 8083' },
-  { key: 'coach', url: '/api/health/coach', label: '教练 8084' }
+  { key: 'knowledge', url: '/api/health/knowledge', label: '知识点服务', port: '8081' },
+  { key: 'qa', url: '/api/health/qa', label: '问答服务', port: '8082' },
+  { key: 'evaluate', url: '/api/health/evaluate', label: '评估服务', port: '8083' },
+  { key: 'coach', url: '/api/health/coach', label: '成长教练', port: '8084' }
 ]
 
 function isUpResponse(res) {
@@ -25,7 +25,8 @@ export async function checkAllServices() {
           ...svc,
           up: isUpResponse(res),
           service: data?.service ?? null,
-          components: data?.components ?? null
+          components: data?.components ?? null,
+          displayLabel: data?.service ? `${svc.label} · ${svc.port}` : `${svc.label} · ${svc.port}`
         }
       } catch {
         return { ...svc, up: false, service: null }

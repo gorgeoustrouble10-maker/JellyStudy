@@ -65,7 +65,8 @@ const healthTooltip = () => {
   if (!health.value.results?.length) return health.value.label
   return health.value.results
     .map((r) => {
-      const base = `${r.label}: ${r.up ? '正常' : '不可用'}`
+      const base = `${r.displayLabel || r.label}: ${r.up ? '正常' : '不可用'}`
+      if (r.service) return `${base} (${r.service})`
       if (!r.components) return base
       const detail = Object.entries(r.components).map(([k, v]) => `${k}=${v}`).join(', ')
       return `${base} [${detail}]`
@@ -168,7 +169,7 @@ const toggleSidebar = () => {
           <ul v-if="health.results.length" class="mt-2 space-y-1 text-xs text-gray-500">
             <li v-for="r in health.results" :key="r.key" class="flex items-center gap-1.5">
               <span class="w-1.5 h-1.5 rounded-full" :class="r.up ? 'bg-green-500' : 'bg-red-400'" />
-              {{ r.label }}
+              {{ r.displayLabel || r.label }}
             </li>
           </ul>
         </section>

@@ -19,7 +19,9 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -68,19 +70,28 @@ public class EvaluateServiceImpl implements IEvaluateService {
                 return createFallbackQuestionEvaluation(questionId, questionTitle, questionContent);
             }
             
-            // 保存评估结果到数据库
-            QuestionEvaluation entity = QuestionEvaluation.builder()
-                    .id(result.getId())
-                    .questionId(questionId)
-                    .questionTitle(questionTitle)
-                    .questionContent(questionContent)
-                    .knowledgePoints(toJson(result.getKnowledgePoints()))
-                    .difficulty(result.getDifficulty())
-                    .difficultyDescription(result.getDifficultyDescription())
-                    .evaluationDetails(result.getEvaluationDetails())
-                    .createdAt(result.getCreatedAt())
-                    .build();
-            
+            QuestionEvaluation entity = questionEvaluationRepository.findByQuestionId(questionId)
+                    .map(existing -> {
+                        existing.setQuestionTitle(questionTitle);
+                        existing.setQuestionContent(questionContent);
+                        existing.setKnowledgePoints(toJson(result.getKnowledgePoints()));
+                        existing.setDifficulty(result.getDifficulty());
+                        existing.setDifficultyDescription(result.getDifficultyDescription());
+                        existing.setEvaluationDetails(result.getEvaluationDetails());
+                        return existing;
+                    })
+                    .orElseGet(() -> QuestionEvaluation.builder()
+                            .id(result.getId() != null ? result.getId() : UUID.randomUUID().toString())
+                            .questionId(questionId)
+                            .questionTitle(questionTitle)
+                            .questionContent(questionContent)
+                            .knowledgePoints(toJson(result.getKnowledgePoints()))
+                            .difficulty(result.getDifficulty())
+                            .difficultyDescription(result.getDifficultyDescription())
+                            .evaluationDetails(result.getEvaluationDetails())
+                            .createdAt(result.getCreatedAt() != null ? result.getCreatedAt() : new Date())
+                            .build());
+
             questionEvaluationRepository.save(entity);
             evaluationRedisCache.putQuestionEvaluation(questionId, entity);
             log.info("问题评估完成并保存, questionId: {}, difficulty: {}", questionId, result.getDifficulty());
@@ -117,19 +128,31 @@ public class EvaluateServiceImpl implements IEvaluateService {
                 return createFallbackAnswerEvaluation(answerId, questionId, answerContent);
             }
 
-            AnswerEvaluation entity = AnswerEvaluation.builder()
-                    .id(result.getId())
-                    .answerId(answerId)
-                    .questionId(questionId)
-                    .answerContent(answerContent)
-                    .score(result.getScore())
-                    .grade(result.getGrade())
-                    .evaluationDetails(result.getEvaluationDetails())
-                    .strengths(toJson(result.getStrengths()))
-                    .suggestions(toJson(result.getSuggestions()))
-                    .referenceAnswer(result.getReferenceAnswer())
-                    .createdAt(result.getCreatedAt())
-                    .build();
+            AnswerEvaluation entity = answerEvaluationRepository.findByAnswerId(answerId)
+                    .map(existing -> {
+                        existing.setQuestionId(questionId);
+                        existing.setAnswerContent(answerContent);
+                        existing.setScore(result.getScore());
+                        existing.setGrade(result.getGrade());
+                        existing.setEvaluationDetails(result.getEvaluationDetails());
+                        existing.setStrengths(toJson(result.getStrengths()));
+                        existing.setSuggestions(toJson(result.getSuggestions()));
+                        existing.setReferenceAnswer(result.getReferenceAnswer());
+                        return existing;
+                    })
+                    .orElseGet(() -> AnswerEvaluation.builder()
+                            .id(result.getId() != null ? result.getId() : UUID.randomUUID().toString())
+                            .answerId(answerId)
+                            .questionId(questionId)
+                            .answerContent(answerContent)
+                            .score(result.getScore())
+                            .grade(result.getGrade())
+                            .evaluationDetails(result.getEvaluationDetails())
+                            .strengths(toJson(result.getStrengths()))
+                            .suggestions(toJson(result.getSuggestions()))
+                            .referenceAnswer(result.getReferenceAnswer())
+                            .createdAt(result.getCreatedAt() != null ? result.getCreatedAt() : new Date())
+                            .build());
 
             answerEvaluationRepository.save(entity);
             evaluationRedisCache.putAnswerEvaluation(answerId, entity);

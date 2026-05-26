@@ -296,7 +296,7 @@ const submitQuiz = async () => {
   try {
     const res = await coachAPI.submitQuiz(quiz.value.id, quizAnswer.value.trim())
     quizResult.value = res.data
-    flashSuccess(`批改完成！得分 ${res.data.score}，已获得积分奖励`)
+    flashSuccess(`批改完成！得分 ${res.data.score}。${res.data.checkInMessage || '已获得积分奖励'}`)
     await loadAll()
   } catch (e) {
     error.value = extractError(e)
@@ -599,10 +599,13 @@ onMounted(() => {
             <li
               v-for="task in tasks"
               :key="task.taskId"
-              class="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              class="flex items-center justify-between p-3 rounded-lg"
+              :class="task.completed ? 'bg-green-50 border border-green-100' : 'bg-gray-50'"
             >
-              <span>{{ task.title }}</span>
+              <span :class="task.completed ? 'text-green-800 line-through decoration-green-400' : ''">{{ task.title }}</span>
+              <span v-if="task.completed" class="text-xs text-green-600 font-medium">已完成 ✓</span>
               <button
+                v-else
                 type="button"
                 class="text-primary-600 text-sm hover:underline disabled:opacity-50"
                 :disabled="!!actionLoading"

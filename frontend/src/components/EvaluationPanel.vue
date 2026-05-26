@@ -32,6 +32,20 @@ const loadQuestionTitles = async () => {
 const getQuestionTitle = (questionId) =>
   questionTitleById.value[questionId] || '（原问题已删除）';
 
+/** 同一问题/回答只保留最新一条评估记录 */
+const dedupeLatest = (list, idKey) => {
+  const map = new Map();
+  for (const item of list) {
+    const key = item[idKey];
+    if (!key) continue;
+    const prev = map.get(key);
+    const t = item.createdAt ? new Date(item.createdAt).getTime() : 0;
+    const pt = prev?.createdAt ? new Date(prev.createdAt).getTime() : 0;
+    if (!prev || t >= pt) map.set(key, item);
+  }
+  return [...map.values()];
+};
+
 const pruneOrphanEvaluations = async () => {
   const known = new Set(Object.keys(questionTitleById.value));
   if (known.size === 0) return;
@@ -97,7 +111,7 @@ const fetchAnswerEvaluations = async () => {
 
 const filteredQuestionEvaluations = computed(() => {
   const knownIds = Object.keys(questionTitleById.value);
-  let list = questionEvaluations.value;
+  let list = dedupeLatest(questionEvaluations.value, 'questionId');
   if (knownIds.length > 0) {
     list = list.filter((item) => knownIds.includes(item.questionId));
   }
@@ -107,7 +121,7 @@ const filteredQuestionEvaluations = computed(() => {
 
 const filteredAnswerEvaluations = computed(() => {
   const knownIds = Object.keys(questionTitleById.value);
-  let list = answerEvaluations.value;
+  let list = dedupeLatest(answerEvaluations.value, 'answerId');
   if (knownIds.length > 0) {
     list = list.filter((item) => knownIds.includes(item.questionId));
   }
@@ -183,7 +197,7 @@ const refreshData = async () => {
 
 onMounted(async () => {
   await loadQuestionTitles();
-  await fetchQuestionEvaluations();
+  await Promise.all([fetchQuestionEvaluations(), fetchAnswerEvaluations()]);
 });
 </script>
 

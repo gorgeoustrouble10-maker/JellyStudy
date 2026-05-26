@@ -58,7 +58,8 @@ const filteredAnswers = computed(() => {
  }
  // 分类筛选
  if (activeFilter.value === 'hot') {
- result = [...result].sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
+ result = [...result].filter((a) => (a.likeCount || 0) > 0)
+   .sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
  }
  return result;
 });
