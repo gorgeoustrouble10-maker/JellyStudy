@@ -1,0 +1,6 @@
+# Nacos 配置 — jellystudy-knowledge.yaml
+# Group: DEFAULT_GROUP  |  导入: scripts/import-nacos-config.ps1
+
+knowledge:
+  list:
+    max-list-size: 0

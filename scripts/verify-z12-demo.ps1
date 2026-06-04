@@ -22,7 +22,19 @@ Write-Host "`n=== 4. Coach Nacos 配置 ===" -ForegroundColor Cyan
 try {
     $c = Invoke-RestMethod "http://127.0.0.1:8084/api/coach/config" -TimeoutSec 8
     $c | ConvertTo-Json -Compress
-} catch { Write-Warning "Coach 需登录 Token；直连: curl -H Authorization Bearer ..." }
+} catch { Write-Warning "Coach config: $_" }
+
+Write-Host "`n=== 4b. Knowledge Nacos 配置 ===" -ForegroundColor Cyan
+try {
+    $k = Invoke-RestMethod "http://127.0.0.1:8081/api/knowledge-points/config" -TimeoutSec 8
+    $k | ConvertTo-Json -Compress
+} catch { Write-Warning "Knowledge config: $_" }
+
+Write-Host "`n=== 4c. QA Nacos 配置 ===" -ForegroundColor Cyan
+try {
+    $q = Invoke-RestMethod "http://127.0.0.1:8082/api/questions/config" -TimeoutSec 8
+    $q | ConvertTo-Json -Compress
+} catch { Write-Warning "QA config: $_" }
 
 Write-Host "`n=== 5. evaluate-2 双实例 (8085) ===" -ForegroundColor Cyan
 try {

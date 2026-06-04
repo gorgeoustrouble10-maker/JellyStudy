@@ -59,7 +59,7 @@ public class KnowledgeMasteryBuilder {
                 percent = ss;
                 source = "socratic";
             } else if (weak.stream().anyMatch(w -> matches(name, w))) {
-                percent = 55;
+                percent = 45;
                 source = "diagnosis";
             } else {
                 percent = 0;
@@ -77,7 +77,10 @@ public class KnowledgeMasteryBuilder {
 
     private static String statusFor(int percent, String source) {
         if ("none".equals(source)) {
-            return "未练习";
+            return "暂无练习";
+        }
+        if ("diagnosis".equals(source)) {
+            return "待测评";
         }
         if (percent >= 80) {
             return "已掌握";

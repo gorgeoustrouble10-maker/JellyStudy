@@ -29,5 +29,10 @@ function Publish-NacosConfig($dataId, $filePath) {
 Write-Host "Nacos: $base (user=$user)"
 Publish-NacosConfig "jellystudy-evaluate-service.yaml" (Join-Path $configDir "jellystudy-evaluate-service.yaml")
 Publish-NacosConfig "jellystudy-coach-service.yaml" (Join-Path $configDir "jellystudy-coach-service.yaml")
-Write-Host "Done. 验证: GET http://127.0.0.1:8083/api/evaluations/instance-info"
-Write-Host "       GET http://127.0.0.1:8084/api/coach/config"
+Publish-NacosConfig "jellystudy-knowledge.yaml" (Join-Path $configDir "jellystudy-knowledge.yaml")
+Publish-NacosConfig "jellystudy-qa.yaml" (Join-Path $configDir "jellystudy-qa.yaml")
+Write-Host "Done. 验证:"
+Write-Host "  GET http://127.0.0.1:8083/api/evaluations/instance-info"
+Write-Host "  GET http://127.0.0.1:8084/api/coach/config"
+Write-Host "  GET http://127.0.0.1:8081/api/knowledge-points/config"
+Write-Host "  GET http://127.0.0.1:8082/api/questions/config"

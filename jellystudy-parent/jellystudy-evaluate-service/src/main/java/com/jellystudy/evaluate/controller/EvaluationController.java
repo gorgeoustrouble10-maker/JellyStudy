@@ -10,7 +10,7 @@ import com.jellystudy.evaluate.config.EvaluateModelProperties;
 import com.jellystudy.evaluate.service.EvaluateServiceImpl;
 import com.jellystudy.evaluate.entity.AnswerEvaluation;
 import com.jellystudy.evaluate.entity.QuestionEvaluation;
-import com.jellystudy.evaluate.exception.ApiResponse;
+import com.jellystudy.common.api.ApiResponse;
 import com.jellystudy.evaluate.redis.EvaluationRedisCache;
 import com.jellystudy.evaluate.repository.AnswerEvaluationRepository;
 import com.jellystudy.evaluate.repository.QuestionEvaluationRepository;

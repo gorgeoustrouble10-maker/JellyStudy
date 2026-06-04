@@ -17,4 +17,7 @@ public class SocraticChatRequest implements Serializable {
     private String message;
     @Builder.Default
     private List<SocraticMessageDTO> history = new ArrayList<>();
+    /** socratic=追问引导（默认）；popularize=纯科普，先讲透再轻问 */
+    @Builder.Default
+    private String teachMode = "socratic";
 }

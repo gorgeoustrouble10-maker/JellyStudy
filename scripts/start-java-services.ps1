@@ -1,22 +1,9 @@
 $ErrorActionPreference = "Stop"
-$root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+. (Join-Path $PSScriptRoot "lib\project-env.ps1")
 
-$secretsBat = Join-Path $root "local-secrets.bat"
-if (Test-Path $secretsBat) {
-    Get-Content $secretsBat -Encoding UTF8 | ForEach-Object {
-        if ($_ -match '^\s*set\s+(\w+)=(.*)$') {
-            Set-Item -Path "env:$($Matches[1])" -Value $Matches[2].Trim()
-        }
-    }
-}
-
-$env:REDIS_PASSWORD = if ($env:REDIS_PASSWORD) { $env:REDIS_PASSWORD } else { "jellystudy_redis" }
-$env:NACOS_USERNAME = if ($env:NACOS_USERNAME) { $env:NACOS_USERNAME } else { "nacos" }
-$env:NACOS_PASSWORD = if ($env:NACOS_PASSWORD) { $env:NACOS_PASSWORD } else { "nacos" }
-$env:MYSQL_PASSWORD = if ($env:MYSQL_PASSWORD) { $env:MYSQL_PASSWORD } else { "123456" }
-Remove-Item Env:SERVER_PORT -ErrorAction SilentlyContinue
-Remove-Item Env:INSTANCE_ID -ErrorAction SilentlyContinue
-Remove-Item Env:DUBBO_PROTOCOL_PORT -ErrorAction SilentlyContinue
+$root = Import-ProjectSecrets -ProjectRoot (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+Write-DashscopeCoachHint
+Clear-JavaServiceEnvOverrides
 
 $agentJar = Join-Path $root "skywalking-agent\skywalking-agent.jar"
 $logDir = Join-Path $root "logs"
@@ -61,19 +48,21 @@ function Start-ServiceJar($name, $dir, $jar, $swName, $port = $null, $extraEnv =
     $agentArgs = @()
     if (Test-Path $agentJar) {
         $agentArgs = @(
-            "-javaagent:$agentJar",
+            "-javaagent:`"$agentJar`"",
             "-Dskywalking.collector.backend_service=127.0.0.1:11800",
             "-Dskywalking.agent.service_name=$swName"
         )
     }
     $outLog = Join-Path $logDir "$name.out.log"
     $errLog = Join-Path $logDir "$name.err.log"
-    $envPrefix = "set SERVER_PORT=$port&&"
+
+    $envVars = @{ SERVER_PORT = "$port" }
     foreach ($kv in $extraEnv.GetEnumerator()) {
-        $envPrefix += " set $($kv.Key)=$($kv.Value)&&"
+        $envVars[$kv.Key] = $kv.Value
     }
     $javaCmd = ($agentArgs + @("-jar", $jarRel)) -join " "
-    $fullCmd = "$envPrefix java $javaCmd"
+    $fullCmd = New-JavaServiceCmd -ProjectRoot $root -WorkDir $workDir -JavaArgs $javaCmd -ExtraEnv $envVars
+
     Start-Process cmd.exe -ArgumentList @("/c", $fullCmd) `
         -WorkingDirectory $workDir `
         -RedirectStandardOutput $outLog -RedirectStandardError $errLog `

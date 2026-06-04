@@ -1,7 +1,8 @@
 <script setup>import { ref, onMounted } from 'vue';
 import { Plus, Search, Edit2, Trash2, Eye, Save, X, BookOpen, Clock } from 'lucide-vue-next';
-import { knowledgePointAPI, questionAPI } from '../services/api';
+import { knowledgePointAPI, questionAPI, unwrapApiList } from '../services/api';
 import { requireLogin } from '../utils/requireLogin.js';
+import PageLoader from './PageLoader.vue';
 const knowledgePoints = ref([]);
 const searchKeyword = ref('');
 const showModal = ref(false);
@@ -22,8 +23,8 @@ const fetchKnowledgePoints = async () => {
    knowledgePointAPI.getAll(),
    questionAPI.getAll()
  ]);
- const points = kpRes.data.data || [];
- const questions = qRes.data.data || [];
+ const points = unwrapApiList(kpRes);
+ const questions = unwrapApiList(qRes);
  const countByKp = {};
  questions.forEach((q) => {
    if (q.knowledgePointId) {
@@ -125,17 +126,17 @@ onMounted(() => {
     <!-- 头部操作区 -->
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
       <div class="relative flex-1 w-full sm:w-auto">
-        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-faint" />
         <input
           v-model="searchKeyword"
           type="text"
           placeholder="搜索知识点..."
-          class="w-full sm:w-64 pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+          class="input input-sm w-full sm:w-64 pl-10"
         />
       </div>
       <button
         @click="openModal()"
-        class="flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-all duration-200 shadow-md hover:shadow-lg"
+        class="btn-primary flex items-center gap-2"
       >
         <Plus class="w-5 h-5" />
         <span>新建知识点</span>
@@ -143,21 +144,19 @@ onMounted(() => {
     </div>
 
     <!-- 错误提示 -->
-    <div v-if="error" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
+    <div v-if="error" class="alert-error">
       {{ error }}
     </div>
 
     <!-- 加载状态 -->
-    <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
-    </div>
+    <PageLoader v-if="loading" label="正在加载知识点…" />
 
     <!-- 知识点列表 -->
     <div v-else-if="filteredPoints().length > 0" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       <div
         v-for="point in filteredPoints()"
         :key="point.id"
-        class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 group"
+        class="list-card group"
       >
         <div class="flex items-start justify-between mb-3">
           <div class="flex items-center gap-2">
@@ -165,10 +164,10 @@ onMounted(() => {
               <BookOpen class="w-5 h-5 text-primary-600" />
             </div>
             <div>
-              <h3 class="font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+              <h3 class="font-semibold text-main group-hover:text-primary-600 transition-colors">
                 {{ point.name }}
               </h3>
-              <span v-if="point.path" class="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+              <span v-if="point.path" class="badge">
                 {{ point.path }}
               </span>
             </div>
@@ -176,7 +175,7 @@ onMounted(() => {
           <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               @click="openModal(point)"
-              class="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+              class="icon-btn"
               title="编辑"
             >
               <Edit2 class="w-4 h-4" />
@@ -191,9 +190,9 @@ onMounted(() => {
           </div>
         </div>
         
-        <p class="text-gray-600 text-sm mb-4 line-clamp-2">{{ point.description }}</p>
+        <p class="text-muted text-sm mb-4 line-clamp-2">{{ point.description }}</p>
         
-        <div class="flex items-center justify-between text-xs text-gray-400">
+        <div class="flex items-center justify-between text-xs text-faint">
           <div class="flex items-center gap-1">
             <Clock class="w-3 h-3" />
             <span>{{ formatDate(point.createdAt) }}</span>
@@ -204,15 +203,15 @@ onMounted(() => {
     </div>
 
     <!-- 空状态 -->
-    <div v-else class="text-center py-16">
-      <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <BookOpen class="w-10 h-10 text-gray-400" />
+    <div v-else class="empty-state">
+      <div class="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+        <BookOpen class="w-10 h-10 text-faint" />
       </div>
-      <h3 class="text-lg font-medium text-gray-900 mb-2">暂无知识点</h3>
-      <p class="text-gray-500 mb-6">点击上方按钮创建您的第一个知识点</p>
+      <h3 class="text-lg font-medium text-main mb-2">暂无知识点</h3>
+      <p class="text-muted mb-6">点击上方按钮创建您的第一个知识点</p>
       <button
         @click="openModal()"
-        class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-all"
+        class="btn-primary inline-flex items-center gap-2"
       >
         <Plus class="w-5 h-5" />
         <span>新建知识点</span>
@@ -220,62 +219,62 @@ onMounted(() => {
     </div>
 
     <!-- 模态框 -->
-    <div v-if="showModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-fadeIn">
-        <div class="flex items-center justify-between p-6 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">
+    <div v-if="showModal" class="modal-backdrop z-50">
+      <div class="modal-card max-w-lg">
+        <div class="flex items-center justify-between pb-4 mb-4 border-b">
+          <h3 class="text-lg font-semibold text-main">
             {{ isEditing ? '编辑知识点' : '新建知识点' }}
           </h3>
           <button
             @click="closeModal"
-            class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            class="icon-btn"
           >
             <X class="w-5 h-5" />
           </button>
         </div>
         
-        <div class="p-6 space-y-4">
+        <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">知识点名称 *</label>
+            <label class="block text-sm font-medium text-muted mb-2">知识点名称 *</label>
             <input
               v-model="currentItem.name"
               type="text"
               placeholder="请输入知识点名称"
-              class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              class="input"
             />
           </div>
           
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">分类路径</label>
+            <label class="block text-sm font-medium text-muted mb-2">分类路径</label>
             <input
               v-model="currentItem.path"
               type="text"
               placeholder="请输入分类路径，如: 数学/代数"
-              class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              class="input"
             />
           </div>
           
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">知识点描述</label>
+            <label class="block text-sm font-medium text-muted mb-2">知识点描述</label>
             <textarea
               v-model="currentItem.description"
               rows="4"
               placeholder="请输入知识点描述"
-              class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+              class="input"
             ></textarea>
           </div>
         </div>
         
-        <div class="flex justify-end gap-3 p-6 border-t border-gray-200">
+        <div class="flex justify-end gap-3 pt-4 mt-4 border-t">
           <button
             @click="closeModal"
-            class="px-5 py-2.5 text-gray-600 hover:text-gray-900 font-medium rounded-xl transition-colors"
+            class="btn-secondary"
           >
             取消
           </button>
           <button
             @click="saveKnowledgePoint"
-            class="flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-all"
+            class="btn-primary flex items-center gap-2"
           >
             <Save class="w-4 h-4" />
             <span>{{ isEditing ? '保存修改' : '创建' }}</span>

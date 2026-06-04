@@ -1,8 +1,9 @@
 <script setup>import { ref, onMounted, computed, watch } from 'vue';
 import { Plus, Search, Edit2, Trash2, HelpCircle, Clock, Flame, Tag, ChevronDown, ChevronUp, X, Save } from 'lucide-vue-next';
-import { questionAPI, knowledgePointAPI, evaluationAPI } from '../services/api';
+import { questionAPI, knowledgePointAPI, evaluationAPI, unwrapApiList } from '../services/api';
 import { extractApiError } from '../utils/extractApiError.js';
 import { requireLogin } from '../utils/requireLogin.js';
+import PageLoader from './PageLoader.vue';
 const questions = ref([]);
 const knowledgePoints = ref([]);
 const searchKeyword = ref('');
@@ -24,7 +25,7 @@ const fetchQuestions = async () => {
  error.value = '';
  try {
  const response = await questionAPI.getAll();
- questions.value = response.data.data || response.data;
+ questions.value = unwrapApiList(response);
  }
  catch (err) {
  error.value = '获取问题失败: ' + extractApiError(err, '问答服务异常');
@@ -39,7 +40,7 @@ const fetchHotQuestions = async () => {
  error.value = '';
  try {
  const response = await questionAPI.getHot();
- questions.value = response.data.data || response.data;
+ questions.value = unwrapApiList(response);
  }
  catch (err) {
  error.value = '获取热门问题失败: ' + extractApiError(err, 'Redis 热门榜不可用');
@@ -53,7 +54,7 @@ const fetchMostViewedQuestions = async () => {
  error.value = '';
  try {
  const response = await questionAPI.getRecommended();
- questions.value = response.data.data || response.data;
+ questions.value = unwrapApiList(response);
  }
  catch (err) {
  error.value = '获取常看问题失败: ' + extractApiError(err, 'Redis 常看榜不可用');
@@ -77,7 +78,7 @@ const fetchKnowledgePoints = async () => {
  try {
  const response = await knowledgePointAPI.getAll();
  // 兼容两种响应格式：ApiResponse包装格式或直接数组格式
- knowledgePoints.value = response.data.data || response.data;
+ knowledgePoints.value = unwrapApiList(response);
  }
  catch (err) {
  console.error('获取知识点列表失败:', err);
@@ -100,7 +101,7 @@ watch(searchKeyword, (kw) => {
  error.value = '';
  try {
  const response = await questionAPI.search(trimmed);
- questions.value = response.data.data || response.data;
+ questions.value = unwrapApiList(response);
  } catch (err) {
  error.value = '搜索失败: ' + extractApiError(err, '搜索不可用');
  } finally {
@@ -230,33 +231,31 @@ onMounted(() => {
     <!-- 头部操作区 -->
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
       <div class="relative flex-1 w-full sm:w-auto">
-        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-faint" />
         <input
           v-model="searchKeyword"
           type="text"
           placeholder="搜索问题..."
-          class="w-full sm:w-64 pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+          class="input input-sm w-full sm:w-64 pl-10"
         />
       </div>
       
       <!-- 筛选按钮 -->
       <div class="flex items-center gap-2">
-        <div class="flex bg-gray-100 rounded-lg p-1">
+        <div class="segment">
           <button
             v-for="filter in [{ id: 'all', name: '全部' }, { id: 'hot', name: '热门' }, { id: 'viewed', name: '常看' }]"
             :key="filter.id"
             @click="switchFilter(filter.id)"
-            class="px-3 py-1.5 text-sm font-medium rounded-md transition-all"
-            :class="activeFilter === filter.id 
-              ? 'bg-white text-primary-600 shadow-sm' 
-              : 'text-gray-600 hover:text-gray-900'"
+            class="segment-item"
+            :class="{ 'segment-item-active': activeFilter === filter.id }"
           >
             {{ filter.name }}
           </button>
         </div>
         <button
           @click="openModal()"
-          class="flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-all duration-200 shadow-md hover:shadow-lg"
+          class="btn-primary flex items-center gap-2"
         >
           <Plus class="w-5 h-5" />
           <span>提问</span>
@@ -265,21 +264,19 @@ onMounted(() => {
     </div>
 
     <!-- 错误提示 -->
-    <div v-if="error" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
+    <div v-if="error" class="alert-error">
       {{ error }}
     </div>
 
     <!-- 加载状态 -->
-    <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
-    </div>
+    <PageLoader v-if="loading" label="正在加载题目…" />
 
     <!-- 问题列表 -->
     <div v-else-if="filteredQuestions.length > 0" class="space-y-4">
       <div
         v-for="question in filteredQuestions"
         :key="question.id"
-        class="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300"
+        class="list-card overflow-hidden !p-0"
       >
         <!-- 问题头部 -->
         <div class="p-5 cursor-pointer" @click="toggleExpand(question.id)">
@@ -290,7 +287,7 @@ onMounted(() => {
                   <HelpCircle class="w-5 h-5 text-amber-600" />
                 </div>
                 <div>
-                  <h3 class="font-semibold text-gray-900 hover:text-primary-600 transition-colors">
+                  <h3 class="font-semibold text-main hover:text-primary-600 transition-colors">
                     {{ question.title }}
                   </h3>
                   <span class="text-xs px-2 py-0.5 bg-primary-50 text-primary-600 rounded-full">
@@ -299,9 +296,9 @@ onMounted(() => {
                 </div>
               </div>
               
-              <p class="text-gray-600 text-sm ml-13 line-clamp-2 mb-3">{{ question.content }}</p>
+              <p class="text-muted text-sm ml-13 line-clamp-2 mb-3">{{ question.content }}</p>
               
-              <div class="flex items-center gap-4 text-xs text-gray-400">
+              <div class="flex items-center gap-4 text-xs text-faint">
                 <div class="flex items-center gap-1">
                   <Clock class="w-3 h-3" />
                   <span>{{ formatDate(question.createdAt) }}</span>
@@ -317,21 +314,21 @@ onMounted(() => {
             <div class="flex items-center gap-2">
               <button
                 @click.stop="openModal(question)"
-                class="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                class="icon-btn"
                 title="编辑"
               >
                 <Edit2 class="w-4 h-4" />
               </button>
               <button
                 @click.stop="deleteQuestion(question.id)"
-                class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                class="p-2 text-faint hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 title="删除"
               >
                 <Trash2 class="w-4 h-4" />
               </button>
               <component 
                 :is="expandedId === question.id ? ChevronUp : ChevronDown" 
-                class="w-5 h-5 text-gray-400"
+                class="w-5 h-5 text-faint"
               />
             </div>
           </div>
@@ -339,17 +336,17 @@ onMounted(() => {
 
         <!-- 展开详情 -->
         <div v-if="expandedId === question.id" class="px-5 pb-5 border-t border-gray-100 pt-4">
-          <div class="bg-gray-50 rounded-xl p-4">
-            <h4 class="text-sm font-medium text-gray-700 mb-2">详细描述</h4>
-            <p class="text-gray-600 text-sm">{{ question.content }}</p>
+          <div class="subtle-panel">
+            <h4 class="text-sm font-medium text-muted mb-2">详细描述</h4>
+            <p class="text-muted text-sm">{{ question.content }}</p>
           </div>
           <div v-if="question.tags && question.tags.length > 0" class="mt-4">
             <div class="flex items-center gap-1 flex-wrap">
-              <Tag class="w-4 h-4 text-gray-400" />
+              <Tag class="w-4 h-4 text-faint" />
               <span
                 v-for="tag in question.tags"
                 :key="tag"
-                class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full"
+                class="badge"
               >
                 {{ tag }}
               </span>
@@ -361,14 +358,14 @@ onMounted(() => {
 
     <!-- 空状态 -->
     <div v-else class="text-center py-16">
-      <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <HelpCircle class="w-10 h-10 text-gray-400" />
+      <div class="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+        <HelpCircle class="w-10 h-10 text-faint" />
       </div>
-      <h3 class="text-lg font-medium text-gray-900 mb-2">暂无问题</h3>
-      <p class="text-gray-500 mb-6">点击上方按钮提出您的第一个问题</p>
+      <h3 class="text-lg font-medium text-main mb-2">暂无问题</h3>
+      <p class="text-muted mb-6">点击上方按钮提出您的第一个问题</p>
       <button
         @click="openModal()"
-        class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-all"
+        class="btn-primary inline-flex items-center gap-2"
       >
         <Plus class="w-5 h-5" />
         <span>提问</span>
@@ -376,15 +373,15 @@ onMounted(() => {
     </div>
 
     <!-- 模态框 -->
-    <div v-if="showModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-fadeIn">
+    <div v-if="showModal" class="modal-backdrop z-50">
+      <div class="modal-card max-w-lg">
         <div class="flex items-center justify-between p-6 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">
+          <h3 class="text-lg font-semibold text-main">
             {{ isEditing ? '编辑问题' : '提出问题' }}
           </h3>
           <button
             @click="closeModal"
-            class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            class="icon-btn"
           >
             <X class="w-5 h-5" />
           </button>
@@ -392,20 +389,20 @@ onMounted(() => {
         
         <div class="p-6 space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">问题标题 *</label>
+            <label class="block text-sm font-medium text-muted mb-2">问题标题 *</label>
             <input
               v-model="currentItem.title"
               type="text"
               placeholder="请输入问题标题"
-              class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              class="input"
             />
           </div>
           
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">所属知识点</label>
+            <label class="block text-sm font-medium text-muted mb-2">所属知识点</label>
             <select
               v-model="currentItem.knowledgePointId"
-              class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              class="input"
             >
               <option value="">请选择知识点</option>
               <option v-for="point in knowledgePoints" :key="point.id" :value="point.id">
@@ -415,12 +412,12 @@ onMounted(() => {
           </div>
           
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">问题描述</label>
+            <label class="block text-sm font-medium text-muted mb-2">问题描述</label>
             <textarea
               v-model="currentItem.content"
               rows="4"
               placeholder="请详细描述您的问题"
-              class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+              class="input"
             ></textarea>
           </div>
         </div>
@@ -428,13 +425,13 @@ onMounted(() => {
         <div class="flex justify-end gap-3 p-6 border-t border-gray-200">
           <button
             @click="closeModal"
-            class="px-5 py-2.5 text-gray-600 hover:text-gray-900 font-medium rounded-xl transition-colors"
+            class="px-5 py-2.5 text-muted hover:text-main font-medium rounded-xl transition-colors"
           >
             取消
           </button>
           <button
             @click="saveQuestion"
-            class="flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-all"
+            class="btn-primary flex items-center gap-2"
           >
             <Save class="w-4 h-4" />
             <span>{{ isEditing ? '保存修改' : '提交问题' }}</span>

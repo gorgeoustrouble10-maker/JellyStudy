@@ -8,6 +8,7 @@ import com.jellystudy.coach.document.PetState;
 import com.jellystudy.coach.document.SocraticSession;
 import com.jellystudy.coach.document.WeeklySnapshot;
 import com.jellystudy.coach.redis.CoachRedisCache;
+import com.jellystudy.coach.redis.DailyCheckInResult;
 import com.jellystudy.coach.repository.AiQuizRepository;
 import com.jellystudy.coach.repository.GrowthProfileRepository;
 import com.jellystudy.coach.repository.PetStateRepository;
@@ -25,6 +26,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 import java.util.UUID;
 import java.time.LocalDate;
 import java.time.temporal.WeekFields;
@@ -68,9 +70,10 @@ public class CoachServiceImpl implements ICoachService {
         List<String> weakPoints = resolveWeakPoints(profile);
 
         int goalCount = growthProperties.getDailyGoalCount();
+        List<String> taskWeakPoints = pickRotatingWeakPoints(userId, weakPoints, goalCount);
         List<DailyTaskDTO> tasks = new ArrayList<>();
         for (int i = 0; i < goalCount; i++) {
-            String weak = weakPoints.get(i % weakPoints.size());
+            String weak = taskWeakPoints.get(i % taskWeakPoints.size());
             tasks.add(DailyTaskDTO.builder()
                     .taskId(UUID.randomUUID().toString())
                     .title("巩固练习：" + weak + "（来自知识点库）")
@@ -296,7 +299,8 @@ public class CoachServiceImpl implements ICoachService {
         coachRedisCache.updateLeaderboard(owner, profile.getTotalPoints());
 
         AiQuizDTO dto = toQuizDto(quiz);
-        dto.setCheckInMessage(checkIn.getMessage());
+        dto.setCheckInMessage(checkIn.message());
+        dto.setAiDegraded(grade.aiDegraded());
         return dto;
     }
 
@@ -321,9 +325,14 @@ public class CoachServiceImpl implements ICoachService {
         CoachAiEngine.DiagnosisResult diagnosis = coachAiEngine.diagnoseWeakPoints(summaries, scope);
         profile.setWeakPoints(diagnosis.weakPoints());
         profile.setLastDiagnosis(diagnosis.diagnosis());
-        if (score >= 80) {
-            profile.setTotalPoints(profile.getTotalPoints() + growthProperties.getPointsHighScore());
+        int earned = growthProperties.getPointsPerTask() / 2;
+        if (score >= 60) {
+            earned += growthProperties.getPointsPerTask() / 2;
         }
+        if (score >= 80) {
+            earned += growthProperties.getPointsHighScore();
+        }
+        profile.setTotalPoints(profile.getTotalPoints() + earned);
         profile.setUpdatedAt(new Date());
         growthProfileRepository.save(profile);
         coachRedisCache.updateLeaderboard(resolved, profile.getTotalPoints());
@@ -364,7 +373,8 @@ public class CoachServiceImpl implements ICoachService {
         }
         List<SocraticMessageDTO> history = request.getHistory() != null ? request.getHistory() : List.of();
         String detail = knowledgeScopeService.buildScopeDescription(knowledgeScopeService.loadAll());
-        return coachAiEngine.socraticGuide(topic, message, history, scope, detail);
+        String teachMode = request.getTeachMode() != null ? request.getTeachMode().trim() : "socratic";
+        return coachAiEngine.socraticGuide(topic, message, history, scope, detail, teachMode);
     }
 
     public SocraticSummaryDTO socraticSummarize(String userId, String topic, List<SocraticMessageDTO> history) {
@@ -447,7 +457,8 @@ public class CoachServiceImpl implements ICoachService {
 
     private void syncKnowledgeScope(GrowthProfile profile) {
         List<KnowledgePointDTO> kps = knowledgeScopeService.loadAll();
-        List<String> names = kps.stream().map(KnowledgePointDTO::getName).collect(Collectors.toList());
+        List<String> names = CoachKnowledgeFilter.filterDemoNames(
+                kps.stream().map(KnowledgePointDTO::getName).collect(Collectors.toList()));
         profile.setLearnedKnowledgePoints(names);
         if (names.isEmpty()) {
             profile.setLastDiagnosis("请先在「知识点管理」中添加知识点，Coach 才能基于您的学习内容出题。");
@@ -455,11 +466,11 @@ public class CoachServiceImpl implements ICoachService {
             return;
         }
         List<String> currentWeak = profile.getWeakPoints();
-        if (currentWeak == null || currentWeak.isEmpty()
-                || currentWeak.stream().anyMatch(w -> w.contains("Spring Boot") || w.contains("微服务"))) {
-            profile.setWeakPoints(topFromList(names, 3));
-            profile.setLastDiagnosis("已同步您的 " + names.size() + " 个知识点："
-                    + String.join("、", names) + "。练习将严格限定在此范围内。");
+        if (CoachKnowledgeFilter.hasStaleCoachMarkers(currentWeak, profile.getLastDiagnosis())) {
+            List<String> picked = pickRotatingWeakPoints(profile.getUserId(), names, 3);
+            profile.setWeakPoints(picked);
+            profile.setLastDiagnosis("已同步知识点库 " + names.size() + " 项。今日推荐巩固："
+                    + String.join("、", picked) + "（完成 AI 练习后将更新掌握度）。");
         } else {
             profile.setWeakPoints(filterToKnown(currentWeak, names));
         }
@@ -476,9 +487,24 @@ public class CoachServiceImpl implements ICoachService {
                     return filtered;
                 }
             }
-            return topFromList(learned, growthProperties.getDailyGoalCount());
+            return pickRotatingWeakPoints(profile.getUserId(), learned, growthProperties.getDailyGoalCount());
         }
         return List.of("请先在知识点管理中添加内容");
+    }
+
+    /** 按用户 + 日期稳定轮换薄弱点，避免每天都是列表前 3 项。 */
+    private List<String> pickRotatingWeakPoints(String userId, List<String> pool, int count) {
+        if (pool == null || pool.isEmpty()) {
+            return List.of();
+        }
+        List<String> copy = new ArrayList<>(CoachKnowledgeFilter.filterDemoNames(pool));
+        if (copy.isEmpty()) {
+            copy = new ArrayList<>(pool);
+        }
+        long seed = LocalDate.now().toEpochDay() ^ (userId != null ? userId.hashCode() : 0);
+        Collections.shuffle(copy, new Random(seed));
+        int n = Math.min(count, copy.size());
+        return new ArrayList<>(copy.subList(0, n));
     }
 
     private List<String> filterToKnown(List<String> weak, List<String> learned) {
@@ -513,6 +539,11 @@ public class CoachServiceImpl implements ICoachService {
     private void grantWelcomeBonusIfNeeded(GrowthProfile profile) {
         if (profile.getTotalPoints() < 10) {
             profile.setTotalPoints(30);
+            if (profile.getLastDiagnosis() == null
+                    || profile.getLastDiagnosis().contains("欢迎加入")
+                    || profile.getLastDiagnosis().isBlank()) {
+                profile.setLastDiagnosis("欢迎加入 JellyCoach！已赠送 30 初始积分；完成一次 AI 练习可打卡并刷新薄弱点。");
+            }
             profile.setUpdatedAt(new Date());
             growthProfileRepository.save(profile);
             coachRedisCache.updateLeaderboard(profile.getUserId(), profile.getTotalPoints());
@@ -588,7 +619,7 @@ public class CoachServiceImpl implements ICoachService {
                 .weakPoints(resolveWeakPoints(p))
                 .learnedKnowledgePoints(learned)
                 .knowledgeMastery(buildKnowledgeMastery(p.getUserId(), learned, resolveWeakPoints(p)))
-                .quizScopeSource("知识点服务 Dubbo → " + learned.size() + " 项")
+                .quizScopeSource("出题白名单（知识点服务 Dubbo）共 " + learned.size() + " 项，非个人选课记录")
                 .lastDiagnosis(p.getLastDiagnosis())
                 .updatedAt(p.getUpdatedAt())
                 .build();

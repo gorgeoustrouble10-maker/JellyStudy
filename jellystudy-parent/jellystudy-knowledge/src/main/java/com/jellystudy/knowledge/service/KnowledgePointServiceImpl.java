@@ -2,11 +2,12 @@ package com.jellystudy.knowledge.service;
 
 import com.jellystudy.common.entity.KnowledgePointDTO;
 import com.jellystudy.common.service.IKnowledgePointService;
+import com.jellystudy.knowledge.config.KnowledgeListProperties;
 import com.jellystudy.knowledge.entity.KnowledgePoint;
 import com.jellystudy.knowledge.repository.KnowledgePointRepository;
 import com.jellystudy.knowledge.repository.QuestionLinkRepository;
+import lombok.RequiredArgsConstructor;
 import org.apache.dubbo.config.annotation.DubboService;
-import org.springframework.beans.factory.annotation.Autowired;
 import java.util.UUID;
 
 import java.util.Date;
@@ -19,20 +20,24 @@ import java.util.stream.Collectors;
  * 知识点Dubbo服务实现
  */
 @DubboService(version = "1.0.0", protocol = "tri")
+@RequiredArgsConstructor
 public class KnowledgePointServiceImpl implements IKnowledgePointService {
 
-    @Autowired
-    private KnowledgePointRepository knowledgePointRepository;
-
-    @Autowired
-    private QuestionLinkRepository questionLinkRepository;
+    private final KnowledgePointRepository knowledgePointRepository;
+    private final QuestionLinkRepository questionLinkRepository;
+    private final KnowledgeListProperties listProperties;
 
     @Override
     public List<KnowledgePointDTO> getAll() {
-        return knowledgePointRepository.findAll().stream()
+        List<KnowledgePointDTO> all = knowledgePointRepository.findAll().stream()
                 .filter(Objects::nonNull)
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
+        int max = listProperties.getMaxListSize();
+        if (max > 0 && all.size() > max) {
+            return all.subList(0, max);
+        }
+        return all;
     }
 
     @Override

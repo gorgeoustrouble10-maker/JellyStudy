@@ -7,7 +7,19 @@ const useGateway = process.env.VITE_DIRECT_BACKEND !== 'true'
 export default defineConfig({
   plugins: [vue()],
   build: {
-    target: 'esnext'
+    target: 'esnext',
+    chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('echarts')) return 'vendor-echarts'
+          if (id.includes('lucide-vue-next')) return 'vendor-icons'
+          if (id.includes('axios')) return 'vendor-http'
+          return 'vendor'
+        }
+      }
+    }
   },
   optimizeDeps: {
     esbuildOptions: {

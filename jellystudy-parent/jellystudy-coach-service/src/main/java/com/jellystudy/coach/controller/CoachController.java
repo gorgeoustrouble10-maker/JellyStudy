@@ -96,6 +96,8 @@ public class CoachController {
 
     @GetMapping("/config")
     public Map<String, Object> runtimeConfig() {
+        String apiKey = modelProperties.getApiKey();
+        boolean dashscopeConfigured = apiKey != null && !apiKey.isBlank();
         return Map.of(
                 "dailyGoalCount", growthProperties.getDailyGoalCount(),
                 "pointsPerTask", growthProperties.getPointsPerTask(),
@@ -103,6 +105,10 @@ public class CoachController {
                 "streakBonus", growthProperties.getStreakBonus(),
                 "modelName", modelProperties.getModelName(),
                 "modelTimeoutMs", modelProperties.getTimeout(),
+                "dashscopeConfigured", dashscopeConfigured,
+                "aiDegradationPolicy", dashscopeConfigured
+                        ? "千问可用：苏格拉底/出题/批改优先 DashScope；守卫与卡壳仍可能走本地逻辑"
+                        : "未配置 DASHSCOPE_API_KEY：苏格拉底/出题/批改将规则或模板降级，请配置 local-secrets.bat 并用 restart-coach 重启",
                 "source", "Nacos coach.growth.* + coach.model.*（@RefreshScope 热更新）");
     }
 }

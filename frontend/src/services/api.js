@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { getToken, clearAuth } from './userContext.js'
+export { unwrapApiData, unwrapApiList } from '../utils/apiResponse.js'
 
 const api = axios.create({
   baseURL: '/api',
@@ -121,8 +122,8 @@ export const coachAPI = {
   submitQuiz: (quizId, answer) => api.post(`/coach/quiz/${quizId}/submit`, { answer }),
   syncKnowledge: () => api.post('/coach/sync-knowledge'),
   getLeaderboard: (limit = 10) => api.get('/coach/leaderboard', { params: { limit } }),
-  socraticAsk: (topic, message, history = []) =>
-    api.post('/coach/socratic', { message, history }, { params: { topic } }),
+  socraticAsk: (topic, message, history = [], teachMode = 'socratic') =>
+    api.post('/coach/socratic', { message, history, teachMode }, { params: { topic } }),
   socraticSummary: (topic, history) =>
     api.post('/coach/socratic/summary', { message: '', history }, { params: { topic } }),
   getConfig: () => api.get('/coach/config')

@@ -17,7 +17,19 @@
 
 **中文路径**：若 Maven/Docker 乱码，运行 `scripts\copy-to-dev-path.bat` 复制到 `C:\dev\jellystudy`
 
+**Clash/代理**：访问 `127.0.0.1` 前执行 `$env:HTTP_PROXY=''; $env:HTTPS_PROXY=''; $env:ALL_PROXY=''`，否则 Gateway 可能 502。
+
+**提交清单**：见 `docs/SUBMISSION_CHECKLIST.md`；一键准备：`powershell -File scripts\submit-prep.ps1`
+
 **千问评估**：`set DASHSCOPE_API_KEY=sk-xxx` 后运行 `start-evaluate-qianwen.bat`
+
+**千问 Coach（苏格拉底/出题）**：在项目根配置 `local-secrets.bat`（可复制 `local-secrets.bat.example`），用 `scripts\start-full-stack.ps1` 或 `scripts\start-java-services.ps1` 启动；仅重启 Coach 可双击 `restart-coach.bat` 或执行 `scripts\restart-coach.ps1`（会自动 `call local-secrets.bat`，勿裸跑 `java -jar`）。
+
+**苏格拉底两种模式**（成长教练页）：`追问` = 苏格拉底引导 + 卡壳拆解；`纯科普` = 先 4～8 句通俗讲解（零基础友好），偏好会保存在浏览器本地。
+
+**产品化自检**（无截图/报告）：`powershell -File scripts\check-runtime-prereqs.ps1 -RunMavenTests`；Coach 健康 `GET http://127.0.0.1:8084/api/health` 含 `components.dashscope`（密钥未配时为 DOWN）；前端列表统一走 `unwrapApiList` 解析 `{code,data}` 信封。
+
+**GitHub 同步**：远程 [JellyStudy](https://github.com/gorgeoustrouble10-maker/JellyStudy.git)。本地若有未提交改动，需自行 `git add` / `commit` / `push` 后 GitHub 才与电脑一致（当前 `main` 可能与 `origin/main` 同提交但工作区仍有大量未推送修改）。
 
 **SkyWalking**：`pull-skywalking-images.bat` → `docker compose -f docker-compose.skywalking.yml up -d` → UI http://localhost:8090 → `scripts\download-skywalking-agent.ps1` → `start-with-skywalking.bat`
 

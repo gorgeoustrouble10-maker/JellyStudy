@@ -27,9 +27,10 @@ jobs:
       - name: Backend unit tests
         working-directory: jellystudy-parent
         run: |
-          mvn -B test -pl jellystudy-common -Dtest=JellystudyBearerWriteAuthFilterTest,ApiKeyAuthFilterTest
-          mvn -B test -pl jellystudy-coach-service -Dtest=KnowledgeMasteryBuilderTest,AuthTokenStoreTest
-          mvn -B test -pl jellystudy-qa -Dtest=QuestionRankScoringTest
+          mvn -B test -pl jellystudy-common -Dtest=JellystudyBearerWriteAuthFilterTest,ApiKeyAuthFilterTest,JellystudyHealthControllerTest
+          mvn -B test -pl jellystudy-coach-service -Dtest=KnowledgeMasteryBuilderTest,AuthTokenStoreTest,SocraticDialogueGuardTest,CoachAiTagsTest,CoachKnowledgeFilterTest
+          mvn -B test -pl jellystudy-knowledge -Dtest=KnowledgePointControllerTest,KnowledgePointServiceImplTest
+          mvn -B test -pl jellystudy-qa -Dtest=QuestionRankScoringTest,QuestionControllerSearchTest
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4

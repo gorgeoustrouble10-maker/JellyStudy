@@ -3,7 +3,7 @@ package com.jellystudy.qa.controller;
 import com.jellystudy.common.auth.JellystudyUserAttributes;
 import com.jellystudy.common.entity.AnswerDTO;
 import com.jellystudy.common.entity.CommentDTO;
-import com.jellystudy.qa.exception.ApiResponse;
+import com.jellystudy.common.api.ApiResponse;
 import com.jellystudy.qa.service.AnswerServiceImpl;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;

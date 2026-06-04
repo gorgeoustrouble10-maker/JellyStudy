@@ -1,8 +1,14 @@
 <script setup>
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
-import * as echarts from 'echarts'
+import { use, init } from 'echarts/core'
+import { LineChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
 import { coachAPI } from '../services/api.js'
 import { userId, isLoggedIn } from '../services/userContext.js'
+import PageLoader from './PageLoader.vue'
+
+use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
 const loading = ref(false)
 const actionLoading = ref('')
@@ -14,13 +20,18 @@ const quiz = ref(null)
 const quizAnswer = ref('')
 const quizResult = ref(null)
 const nacosConfig = ref(null)
+const dashscopeConfigured = computed(() => nacosConfig.value?.dashscopeConfigured === true)
 const leaderboard = ref([])
 const error = ref('')
 const success = ref('')
 const quizSection = ref(null)
 
+const SOCRATIC_TEACH_MODE_KEY = 'jellystudy-socratic-teach-mode'
 const socraticTopic = ref('')
 const socraticMessage = ref('')
+const socraticTeachMode = ref(
+  (typeof localStorage !== 'undefined' && localStorage.getItem(SOCRATIC_TEACH_MODE_KEY)) || 'socratic'
+)
 /** 当前话题下的连续对话 [{ role, content, hint? }] */
 const socraticMessages = ref([])
 const socraticChatBox = ref(null)
@@ -133,7 +144,7 @@ const knowledgeBars = computed(() => {
   return r.learnedKnowledgePoints.map((name) => ({
     name,
     percent: isWeak(name) ? 55 : 0,
-    status: isWeak(name) ? '待巩固' : '未练习',
+    status: isWeak(name) ? '待测评' : '暂无练习',
     source: 'diagnosis'
   }))
 })
@@ -150,9 +161,9 @@ const summaryHtml = computed(() => {
     const t = line.trim()
     if (!t) return ''
     if (t.startsWith('## ')) return `<h4 class="font-semibold text-gray-800 mt-3 mb-1">${escapeHtml(t.slice(3))}</h4>`
-    if (t.startsWith('# ')) return `<h3 class="font-bold text-lg text-gray-900 mt-2 mb-1">${escapeHtml(t.slice(2))}</h3>`
-    if (t.startsWith('- ')) return `<li class="ml-4 text-gray-700 list-disc">${escapeHtml(t.slice(2))}</li>`
-    return `<p class="text-gray-700 leading-relaxed my-1">${escapeHtml(t)}</p>`
+    if (t.startsWith('# ')) return `<h3 class="font-bold text-lg text-main mt-2 mb-1">${escapeHtml(t.slice(2))}</h3>`
+    if (t.startsWith('- ')) return `<li class="ml-4 text-muted list-disc">${escapeHtml(t.slice(2))}</li>`
+    return `<p class="text-muted leading-relaxed my-1">${escapeHtml(t)}</p>`
   }).join('')
 })
 
@@ -191,7 +202,10 @@ const loadAll = async () => {
     pet.value = petRes.data
     nacosConfig.value = cfg.data
     if (!socraticTopic.value && profile.value?.learnedKnowledgePoints?.length) {
-      socraticTopic.value = profile.value.learnedKnowledgePoints[0]
+      const preferred = profile.value.learnedKnowledgePoints.find(
+        (kp) => !String(kp).includes('1+1') && !String(kp).toLowerCase().includes('demo')
+      )
+      socraticTopic.value = preferred || profile.value.learnedKnowledgePoints[0]
     }
     await loadLeaderboard()
   } catch (e) {
@@ -324,6 +338,17 @@ watch(socraticTopic, (next, prev) => {
   }
 })
 
+watch(socraticTeachMode, (next, prev) => {
+  try {
+    localStorage.setItem(SOCRATIC_TEACH_MODE_KEY, next)
+  } catch {
+    /* ignore */
+  }
+  if (prev && next !== prev && socraticMessages.value.length) {
+    clearSocraticChat()
+  }
+})
+
 const askSocratic = async () => {
   if (!socraticTopic.value || !socraticMessage.value.trim()) return
   const userText = socraticMessage.value.trim()
@@ -334,7 +359,7 @@ const askSocratic = async () => {
   await scrollSocraticToBottom()
   try {
     const history = socraticMessages.value.slice(0, -1)
-    const res = await coachAPI.socraticAsk(socraticTopic.value, userText, history)
+    const res = await coachAPI.socraticAsk(socraticTopic.value, userText, history, socraticTeachMode.value)
     const levels = [res.data.hintLevel1, res.data.hintLevel2, res.data.hintLevel3].filter(Boolean)
     socraticMessages.value.push({
       role: 'assistant',
@@ -342,7 +367,12 @@ const askSocratic = async () => {
       hint: res.data.hint,
       hintLevels: levels,
       revealedHint: 0,
-      misconception: res.data.misconceptionDetected
+      misconception: res.data.misconceptionDetected,
+      stepAdvanced: res.data.stepAdvanced,
+      scaffoldMode: res.data.scaffoldMode,
+      degradedFallback: res.data.degradedFallback,
+      popularizeMode: res.data.popularizeMode,
+      aiSource: res.data.aiSource
     })
     lastAssistantHints.value = { levels, revealed: 0 }
     socraticTurnCount.value = res.data.turnCount || Math.ceil(socraticMessages.value.length / 2)
@@ -387,7 +417,7 @@ const isBusy = (key) => actionLoading.value === key
 const renderTrendChart = async () => {
   const trend = report.value?.pointsTrend
   if (!trendChartEl.value || !trend?.labels?.length) return
-  if (!trendChartInstance) trendChartInstance = echarts.init(trendChartEl.value)
+  if (!trendChartInstance) trendChartInstance = init(trendChartEl.value)
   trendChartInstance.setOption({
     tooltip: { trigger: 'axis' },
     grid: { left: 40, right: 16, top: 24, bottom: 28 },
@@ -417,18 +447,25 @@ onMounted(() => {
 
 <template>
   <section class="space-y-6 animate-fadeIn">
-    <section v-if="loading && !profile" class="card p-8 text-center text-gray-500">
-      <p class="text-lg">正在加载成长教练数据…</p>
-    </section>
+    <PageLoader v-if="loading && !profile" label="正在加载成长教练数据…" />
 
-    <section v-if="error" class="p-4 bg-red-50 text-red-700 rounded-xl border border-red-100">
+    <section v-if="error" class="alert-error">
       {{ error }}
     </section>
-    <section v-if="success" class="p-4 bg-green-50 text-green-700 rounded-xl border border-green-100">
+    <section v-if="success" class="alert-success">
       {{ success }}
     </section>
 
-    <section v-if="actionLoading" class="p-3 bg-primary-50 text-primary-700 rounded-xl text-sm flex items-center gap-2">
+    <section
+      v-if="profile && nacosConfig && !dashscopeConfigured"
+      class="alert-error text-sm"
+    >
+      未检测到千问密钥（<code class="text-xs">DASHSCOPE_API_KEY</code>）。苏格拉底、AI 出题与批改将走本地降级。
+      请在项目根配置 <code class="text-xs">local-secrets.bat</code> 后运行 <code class="text-xs">restart-coach.bat</code>。
+      <span v-if="nacosConfig.aiDegradationPolicy" class="block mt-1 text-faint">{{ nacosConfig.aiDegradationPolicy }}</span>
+    </section>
+
+    <section v-if="actionLoading" class="alert-busy">
       <span class="inline-block w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
       <span v-if="actionLoading === 'quiz'">AI 正在出题，约需 3～10 秒…</span>
       <span v-else-if="actionLoading === 'submit'">AI 正在批改答案…</span>
@@ -442,27 +479,27 @@ onMounted(() => {
     </section>
 
     <section v-if="!isLoggedIn" class="card p-8 text-center">
-      <p class="text-lg text-gray-700 mb-2">请先登录后再使用成长教练</p>
-      <p class="text-sm text-gray-500">顶栏点击「登录 / 注册」，数据将按账号隔离存储</p>
+      <p class="text-lg text-muted mb-2">请先登录后再使用成长教练</p>
+      <p class="text-sm text-muted">顶栏点击「登录 / 注册」，数据将按账号隔离存储</p>
     </section>
 
     <template v-else-if="profile">
       <section class="grid lg:grid-cols-3 gap-6">
         <section class="card p-6 text-center">
-          <p class="text-sm text-gray-500 mb-2">知识宠物 · JellyCoach</p>
+          <p class="text-sm text-muted mb-2">知识宠物 · JellyCoach</p>
 
           <!-- 并排对比：主题皮肤 vs 等级原始形象 -->
           <div v-if="showCompareMode && hasThemeSkin" class="flex items-stretch justify-center gap-3 my-4">
             <div class="flex-1 max-w-[140px] rounded-xl border-2 border-primary-200 bg-primary-50/50 p-3">
               <p class="text-[10px] text-primary-600 font-medium mb-1">主题皮肤</p>
               <div class="text-5xl">{{ themePetEmoji }}</div>
-              <p class="text-xs text-gray-600 mt-2 truncate" :title="themeLabel">{{ themeLabel }}</p>
+              <p class="text-xs text-muted mt-2 truncate" :title="themeLabel">{{ themeLabel }}</p>
             </div>
             <div class="flex items-center text-gray-300 text-sm font-light">VS</div>
             <div class="flex-1 max-w-[140px] rounded-xl border-2 border-green-200 bg-green-50/50 p-3">
               <p class="text-[10px] text-green-600 font-medium mb-1">等级原始</p>
               <div class="text-5xl">{{ basePetEmoji }}</div>
-              <p class="text-xs text-gray-600 mt-2">{{ evolutionLabel }}</p>
+              <p class="text-xs text-muted mt-2">{{ evolutionLabel }}</p>
             </div>
           </div>
 
@@ -481,13 +518,13 @@ onMounted(() => {
           </button>
 
           <h3 class="text-xl font-bold">{{ pet?.petName || '小果冻' }}</h3>
-          <p class="text-gray-500 text-sm">Lv.{{ pet?.level || 1 }} · {{ pet?.mood || 'happy' }}</p>
+          <p class="text-muted text-sm">Lv.{{ pet?.level || 1 }} · {{ pet?.mood || 'happy' }}</p>
           <p v-if="!pet?.currentTheme && evolutionLabel" class="text-xs text-green-600 mt-1">{{ evolutionLabel }}</p>
           <p class="text-xs text-purple-600 mt-1">
             当前形态：{{ pet?.currentTheme || '原始形态（随等级进化）' }}
           </p>
           <div class="mt-3 text-left">
-            <p class="text-xs text-gray-500 mb-2 text-center">切换形态（原始 + 已解锁主题）</p>
+            <p class="text-xs text-muted mb-2 text-center">切换形态（原始 + 已解锁主题）</p>
             <div class="flex flex-wrap gap-2 justify-center">
               <button
                 v-for="opt in themeOptions"
@@ -496,7 +533,7 @@ onMounted(() => {
                 class="px-2 py-1 rounded-full text-xs border transition-colors"
                 :class="activeThemeId === opt.id
                   ? 'bg-primary-100 border-primary-400 text-primary-800'
-                  : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'"
+                  : 'bg-gray-50 border-gray-200 text-muted hover:bg-gray-100'"
                 :disabled="!!actionLoading"
                 @click="switchTheme(opt.id)"
               >
@@ -504,17 +541,19 @@ onMounted(() => {
               </button>
             </div>
           </div>
-          <div class="mt-4 bg-gray-100 rounded-full h-3 overflow-hidden">
+          <div class="mt-4 progress-track h-3">
             <div
               class="h-full bg-primary-500 transition-all"
               :style="{ width: `${((pet?.experience || 0) / (pet?.experienceToNext || 50)) * 100}%` }"
             />
           </div>
-          <p class="text-xs text-gray-400 mt-1">{{ pet?.experience || 0 }} / {{ pet?.experienceToNext || 50 }} EXP</p>
-          <p v-if="pet?.unlockedThemes?.length" class="text-xs text-gray-500 mt-2">
+          <p class="text-xs text-faint mt-1">{{ pet?.experience || 0 }} / {{ pet?.experienceToNext || 50 }} EXP</p>
+          <p v-if="pet?.unlockedThemes?.length" class="text-xs text-muted mt-2">
             已解锁主题：{{ pet.unlockedThemes.join('、') }}（可随时切换，不影响原始形态）
           </p>
-          <p class="text-xs text-amber-600 mt-2">当前积分 {{ profile?.totalPoints ?? 0 }}，喂养需 10 分</p>
+          <p class="text-xs text-amber-600 mt-2">
+            当前积分 {{ profile?.totalPoints ?? 0 }}（含欢迎奖励），喂养需 10 分；练习提交可打卡
+          </p>
           <button
             class="btn-primary mt-4 w-full"
             :disabled="!!actionLoading || (profile?.totalPoints ?? 0) < 10"
@@ -534,15 +573,15 @@ onMounted(() => {
           <div class="grid sm:grid-cols-3 gap-4 mb-4">
             <div class="bg-primary-50 rounded-xl p-4 text-center">
               <p class="text-2xl font-bold text-primary-700">{{ profile?.totalPoints ?? 0 }}</p>
-              <p class="text-xs text-gray-500">总积分</p>
+              <p class="text-xs text-muted">总积分</p>
             </div>
             <div class="bg-amber-50 rounded-xl p-4 text-center">
               <p class="text-2xl font-bold text-amber-700">{{ profile?.streakDays ?? 0 }}</p>
-              <p class="text-xs text-gray-500">连续打卡（自然日）</p>
+              <p class="text-xs text-muted">连续打卡（自然日）</p>
             </div>
             <div class="bg-green-50 rounded-xl p-4 text-center">
               <p class="text-2xl font-bold text-green-700">{{ learnedPoints.length }}</p>
-              <p class="text-xs text-gray-500">已学知识点</p>
+              <p class="text-xs text-muted">已学知识点</p>
             </div>
           </div>
           <div v-if="checkInDots30.length" class="mb-4 p-3 bg-amber-50/50 rounded-lg">
@@ -562,15 +601,15 @@ onMounted(() => {
             <div class="flex gap-1 justify-center">
               <div v-for="(on, i) in checkInDots" :key="i" class="flex flex-col items-center">
                 <div class="w-6 h-6 rounded-full text-[10px] flex items-center justify-center"
-                  :class="on ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-400'">{{ on ? '✓' : '' }}</div>
-                <span class="text-[9px] text-gray-500 mt-0.5">{{ checkInDayLabels[i] }}</span>
+                  :class="on ? 'bg-amber-500 text-white' : 'bg-gray-200 text-faint'">{{ on ? '✓' : '' }}</div>
+                <span class="text-[9px] text-muted mt-0.5">{{ checkInDayLabels[i] }}</span>
               </div>
             </div>
           </div>
-          <p class="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">{{ profile?.lastDiagnosis }}</p>
-          <p v-if="profile?.quizScopeSource" class="text-xs text-gray-400 mt-2">{{ profile.quizScopeSource }}</p>
+          <p class="text-sm text-muted subtle-panel !p-3">{{ profile?.lastDiagnosis }}</p>
+          <p v-if="profile?.quizScopeSource" class="text-xs text-faint mt-2">{{ profile.quizScopeSource }}</p>
           <div v-if="learnedPoints.length" class="mt-3">
-            <span class="text-sm font-medium">已学知识点（AI 出题白名单）：</span>
+            <span class="text-sm font-medium">出题白名单（来自知识点库，共 {{ learnedPoints.length }} 项）：</span>
             <span
               v-for="kp in learnedPoints"
               :key="kp"
@@ -594,7 +633,7 @@ onMounted(() => {
       <section class="grid lg:grid-cols-2 gap-6">
         <section class="card p-6">
           <h3 class="font-semibold text-lg mb-3">今日 AI 推荐任务</h3>
-          <p v-if="!tasks.length" class="text-sm text-gray-500">暂无任务，点击「同步知识点库」后刷新</p>
+          <p v-if="!tasks.length" class="text-sm text-muted">暂无任务，点击「同步知识点库」或完成一次练习后刷新</p>
           <ul v-else class="space-y-2">
             <li
               v-for="task in tasks"
@@ -619,7 +658,7 @@ onMounted(() => {
 
         <section class="card p-6">
           <h3 class="font-semibold text-lg mb-3">积分排行榜 (Redis ZSET)</h3>
-          <p v-if="!leaderboard.length" class="text-sm text-gray-500">暂无排行，完成练习后上榜</p>
+          <p v-if="!leaderboard.length" class="text-sm text-muted">暂无排行，完成练习后上榜</p>
           <ol v-else class="space-y-2">
             <li
               v-for="entry in leaderboard"
@@ -627,7 +666,7 @@ onMounted(() => {
               class="flex items-center justify-between p-2 rounded-lg"
               :class="entry.userId === userId ? 'bg-primary-50' : 'bg-gray-50'"
             >
-              <span>#{{ entry.rank }} {{ entry.userId }}</span>
+              <span>#{{ entry.rank }} {{ entry.userId }}{{ entry.userId === 'demo-user' ? '（演示）' : '' }}</span>
               <span class="font-semibold text-primary-700">{{ entry.points }} 分</span>
             </li>
           </ol>
@@ -637,7 +676,7 @@ onMounted(() => {
       <section ref="quizSection" v-if="quiz" class="card p-6 border-2 border-primary-100">
         <h3 class="font-semibold text-lg mb-2">AI 巩固练习</h3>
         <p class="text-gray-800 mb-2">{{ quiz.question }}</p>
-        <p class="text-xs text-gray-400 mb-3">提示：{{ quiz.hint }}</p>
+        <p class="text-xs text-faint mb-3">提示：{{ quiz.hint }}</p>
         <textarea v-model="quizAnswer" class="input w-full mb-3" rows="3" placeholder="写下你的答案…" />
         <button
           class="btn-primary"
@@ -652,8 +691,11 @@ onMounted(() => {
             <span class="text-lg font-bold" :class="quizResult.score >= 80 ? 'text-green-700' : quizResult.score >= 60 ? 'text-amber-700' : 'text-red-700'">
               {{ quizResult.score }}
             </span>
-            <span class="text-xs text-gray-500 ml-2">（千问真实批改 · 按答案质量梯度打分）</span>
+            <span class="text-xs text-muted ml-2">
+              {{ quizResult.aiDegraded ? '（规则降级批改，非千问）' : '（千问批改 · 按答案质量梯度打分）' }}
+            </span>
           </p>
+          <p v-if="quizResult.aiDegraded" class="text-xs text-amber-700 mt-1">千问暂不可用，分数与评语仅供参考。</p>
           <p class="mt-1">{{ quizResult.feedback }}</p>
           <p v-if="quizResult.score >= 80" class="text-purple-600 mt-1">高分！已解锁对应宠物主题</p>
         </section>
@@ -663,7 +705,9 @@ onMounted(() => {
         <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
           <div>
             <h3 class="font-semibold text-lg">苏格拉底式追问</h3>
-            <p class="text-sm text-gray-500">多轮对话 · 三级提示 · 错误反向纠正 · 结束可生成总结</p>
+            <p class="text-sm text-muted">
+              {{ socraticTeachMode === 'popularize' ? '纯科普：先讲透概念，末尾可轻问一句' : '追问模式：多轮引导 · 三级提示 · 反向纠正' }} · 可生成总结
+            </p>
           </div>
           <div class="flex items-center gap-2 flex-wrap">
             <span v-if="socraticTurnCount" class="text-xs text-primary-600 bg-primary-50 px-2 py-1 rounded-full">
@@ -690,19 +734,43 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="flex items-center gap-2 mb-3">
-          <label class="text-xs text-gray-500 shrink-0">话题</label>
-          <select v-model="socraticTopic" class="input flex-1 max-w-xs">
-            <option v-for="kp in learnedPoints" :key="kp" :value="kp">{{ kp }}</option>
-          </select>
+        <div class="flex flex-wrap items-center gap-3 mb-3">
+          <div class="flex items-center gap-2 flex-1 min-w-[140px]">
+            <label class="text-xs text-muted shrink-0">话题</label>
+            <select v-model="socraticTopic" class="input flex-1 max-w-xs">
+              <option v-for="kp in learnedPoints" :key="kp" :value="kp">{{ kp }}</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-muted shrink-0">模式</label>
+            <div class="segment">
+              <button
+                type="button"
+                class="segment-item text-xs"
+                :class="{ 'segment-item-active': socraticTeachMode === 'socratic' }"
+                @click="socraticTeachMode = 'socratic'"
+              >追问</button>
+              <button
+                type="button"
+                class="segment-item text-xs"
+                :class="{ 'segment-item-active': socraticTeachMode === 'popularize' }"
+                @click="socraticTeachMode = 'popularize'"
+              >纯科普</button>
+            </div>
+          </div>
         </div>
 
         <div
           ref="socraticChatBox"
           class="flex-1 min-h-[220px] max-h-80 overflow-y-auto rounded-xl border border-gray-100 bg-gray-50/80 p-4 space-y-3 mb-3"
         >
-          <p v-if="!socraticMessages.length" class="text-sm text-gray-400 text-center py-8">
-            像聊天一样连续追问。例如先问「什么是阻塞态？」，再根据助教引导继续答下去。
+          <p v-if="!socraticMessages.length" class="text-sm text-faint text-center py-8">
+            <template v-if="socraticTeachMode === 'popularize'">
+              纯科普模式：可直接问「短作业优先是什么？」「阻塞态和就绪态区别？」等，助教会先通俗讲解。
+            </template>
+            <template v-else>
+              追问模式：像聊天一样连续问答。例如先问「什么是阻塞态？」，再根据助教引导答下去。
+            </template>
           </p>
           <template v-for="(msg, idx) in socraticMessages" :key="idx">
             <div v-if="msg.role === 'user'" class="flex justify-end">
@@ -711,17 +779,21 @@ onMounted(() => {
               </div>
             </div>
             <div v-else class="flex justify-start">
-              <div class="max-w-[85%] bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm">
-                <p v-if="msg.misconception" class="text-[10px] text-amber-600 mb-1">↩ 反向引导（帮你发现矛盾）</p>
+              <div class="chat-bubble-ai">
+                <p v-if="msg.degradedFallback" class="text-[10px] text-amber-700 mb-1">⚠ 千问暂不可用，以下为本地辅导（仍围绕上一问）</p>
+                <p v-else-if="msg.popularizeMode" class="text-[10px] text-indigo-600 mb-1">📚 纯科普（先讲透，可继续追问）</p>
+                <p v-else-if="msg.scaffoldMode" class="text-[10px] text-blue-600 mb-1">📖 入门拆解：先通俗理解，再回答上一问</p>
+                <p v-else-if="msg.stepAdvanced" class="text-[10px] text-green-600 mb-1">✓ 理解到位，进入下一问</p>
+                <p v-else-if="msg.misconception" class="text-[10px] text-amber-600 mb-1">↩ 反向引导（帮你发现矛盾）</p>
                 <p class="text-primary-800">{{ msg.content }}</p>
-                <p v-if="msg.hint" class="text-xs text-gray-400 mt-1 border-t border-gray-100 pt-1">💡 {{ msg.hint }}</p>
+                <p v-if="msg.hint" class="text-xs text-faint mt-1 border-t border-gray-100 pt-1">💡 {{ msg.hint }}</p>
                 <div v-if="msg.hintLevels?.length && idx === socraticMessages.length - 1" class="mt-2 flex flex-wrap gap-1">
                   <button
                     v-for="lv in 3"
                     :key="lv"
                     type="button"
                     class="text-[10px] px-2 py-0.5 rounded border"
-                    :class="msg.revealedHint >= lv ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-gray-50 border-gray-200 text-gray-500'"
+                    :class="msg.revealedHint >= lv ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-gray-50 border-gray-200 text-muted'"
                     :disabled="!msg.hintLevels[lv - 1]"
                     @click="revealHint(lv)"
                   >{{ lv }}级提示</button>
@@ -739,18 +811,21 @@ onMounted(() => {
             </div>
           </template>
           <div v-if="isBusy('socratic')" class="flex justify-start">
-            <div class="bg-white border border-gray-200 rounded-2xl px-4 py-2 text-sm text-gray-500 flex items-center gap-2">
+            <div class="chat-bubble-ai flex items-center gap-2 text-muted">
               <span class="inline-block w-3 h-3 border-2 border-primary-400 border-t-transparent rounded-full animate-spin" />
               助教思考中…
             </div>
           </div>
         </div>
 
+        <p v-if="socraticTurnCount >= 6" class="text-xs text-amber-700 mb-2">
+          已进行多轮讨论，若感觉重复可点「清空对话」换话题，或「结束并生成总结」。
+        </p>
         <div class="flex gap-2">
           <input
             v-model="socraticMessage"
             class="input flex-1"
-            placeholder="继续追问或回答助教的问题…"
+            :placeholder="socraticTeachMode === 'popularize' ? '输入想弄懂的概念或你的疑问…' : '继续追问或回答助教的问题…'"
             @keyup.enter="askSocratic"
           />
           <button class="btn-primary shrink-0" :disabled="!!actionLoading || !socraticMessage.trim()" @click="askSocratic">
@@ -759,10 +834,11 @@ onMounted(() => {
         </div>
 
         <section v-if="socraticSummary" class="mt-4 p-4 rounded-xl border-2 border-green-200 bg-green-50/50">
+          <p v-if="socraticSummary.summaryDegraded" class="text-xs text-amber-700 mb-2">⚠ 总结为本地降级生成，可稍后重试获取千问版卡片。</p>
           <h4 class="font-semibold text-green-800 mb-2">📋 知识点总结卡片 · {{ socraticSummary.topic }}</h4>
           <div v-if="socraticSummary.keyPoints?.length" class="mb-2">
-            <p class="text-xs font-medium text-gray-600">核心要点</p>
-            <ul class="text-sm list-disc ml-4 text-gray-700">
+            <p class="text-xs font-medium text-muted">核心要点</p>
+            <ul class="text-sm list-disc ml-4 text-muted">
               <li v-for="(p, i) in socraticSummary.keyPoints" :key="i">{{ p }}</li>
             </ul>
           </div>
@@ -774,7 +850,7 @@ onMounted(() => {
             <p class="text-xs font-medium text-red-600">需纠正的误区</p>
             <p class="text-sm text-red-700">{{ socraticSummary.misconceptions.join('；') }}</p>
           </div>
-          <p v-if="socraticSummary.logicChainComment" class="text-xs text-gray-600 mb-2">
+          <p v-if="socraticSummary.logicChainComment" class="text-xs text-muted mb-2">
             逻辑链：{{ socraticSummary.logicChainComment }}
           </p>
           <p v-if="socraticSummary.evaluateScore != null" class="text-sm font-medium text-blue-700 mb-2">
@@ -790,7 +866,7 @@ onMounted(() => {
         <div class="flex items-center justify-between mb-4">
           <div>
             <h3 class="font-semibold text-lg">AI 学习周报</h3>
-            <p class="text-xs text-gray-400">结构化数据 + ECharts 趋势 + 苏格拉底 MongoDB 记录</p>
+            <p class="text-xs text-faint">结构化数据 + ECharts 趋势 + 苏格拉底 MongoDB 记录</p>
           </div>
           <button class="btn-secondary text-sm" :disabled="!!actionLoading" @click="loadReport">
             {{ isBusy('report') ? '生成中…' : '生成周报' }}
@@ -819,14 +895,14 @@ onMounted(() => {
                 >
                   <div
                     class="w-7 h-7 rounded-full flex items-center justify-center text-xs"
-                    :class="d.active ? 'bg-amber-500 text-white shadow-sm' : 'bg-white/70 text-gray-400'"
+                    :class="d.active ? 'bg-amber-500 text-white shadow-sm' : 'bg-white/70 text-faint'"
                   >{{ d.active ? '✓' : '·' }}</div>
                   <span class="text-[10px] text-amber-700">{{ d.day }}</span>
                 </div>
               </div>
             </div>
             <div class="rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 p-4">
-              <p class="text-xs text-green-700 mb-1">已学知识点</p>
+              <p class="text-xs text-green-700 mb-1">白名单知识点</p>
               <p class="text-3xl font-bold text-green-800">{{ report.learnedKnowledgePoints?.length || 0 }}</p>
               <div class="flex flex-wrap gap-1 mt-2">
                 <span
@@ -839,10 +915,12 @@ onMounted(() => {
           </div>
 
           <div v-if="knowledgeBars.length" class="mb-6">
-            <p class="text-sm font-medium text-gray-700 mb-3">知识点掌握度（AI 练习 + 苏格拉底真实聚合）</p>
+            <p class="text-sm font-medium text-muted mb-3">
+              知识点掌握度（有练习/苏格拉底评分才显示进度；薄弱点未做题为「待测评」）
+            </p>
             <div class="space-y-2">
               <div v-for="bar in knowledgeBars" :key="bar.name" class="flex items-center gap-3">
-                <span class="text-xs text-gray-600 w-28 truncate shrink-0" :title="bar.name">{{ bar.name }}</span>
+                <span class="text-xs text-muted w-28 truncate shrink-0" :title="bar.name">{{ bar.name }}</span>
                 <div class="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     class="h-full rounded-full transition-all"
@@ -850,34 +928,34 @@ onMounted(() => {
                     :style="{ width: `${bar.percent}%` }"
                   />
                 </div>
-                <span class="text-xs w-16 text-right text-gray-400 truncate" :title="bar.source">{{ bar.status }}</span>
+                <span class="text-xs w-16 text-right text-faint truncate" :title="bar.source">{{ bar.status }}</span>
               </div>
             </div>
           </div>
 
           <div v-if="report.pointsTrend?.labels?.length" class="mb-6">
-            <p class="text-sm font-medium text-gray-700 mb-2">积分趋势（MongoDB 周快照 · ECharts）</p>
+            <p class="text-sm font-medium text-muted mb-2">积分趋势（MongoDB 周快照 · ECharts）</p>
             <div ref="trendChartEl" class="w-full h-48 bg-white rounded-lg border border-gray-100" />
           </div>
 
           <div v-if="report.recentSocraticSessions?.length" class="mb-6 p-4 bg-purple-50/50 rounded-xl">
             <p class="text-sm font-medium text-purple-800 mb-2">近期苏格拉底（MongoDB）</p>
             <ul class="text-sm space-y-1">
-              <li v-for="s in report.recentSocraticSessions" :key="s.id" class="text-gray-700">
+              <li v-for="s in report.recentSocraticSessions" :key="s.id" class="text-muted">
                 {{ s.topic }}
                 <span v-if="s.evaluateScore != null" class="text-purple-600">· {{ s.evaluateScore }}分</span>
-                <span class="text-xs text-gray-400">（{{ s.createdAt }}）</span>
+                <span class="text-xs text-faint">（{{ s.createdAt }}）</span>
               </li>
             </ul>
           </div>
 
           <div class="rounded-xl border border-gray-100 bg-gray-50/80 p-4">
-            <p class="text-xs text-gray-400 mb-2">🤖 AI 学习总结 · {{ report.generatedAt }}</p>
+            <p class="text-xs text-faint mb-2">🤖 AI 学习总结 · {{ report.generatedAt }}</p>
             <div class="text-sm prose-sm max-h-64 overflow-y-auto" v-html="summaryHtml" />
           </div>
         </template>
 
-        <p v-else class="text-sm text-gray-400 text-center py-8">点击「生成周报」查看可视化学习报告</p>
+        <p v-else class="text-sm text-faint text-center py-8">点击「生成周报」查看可视化学习报告</p>
       </section>
     </template>
   </section>

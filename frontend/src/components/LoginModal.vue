@@ -54,41 +54,41 @@ const submit = async () => {
 <template>
   <section
     v-if="open"
-    class="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+    class="modal-backdrop"
     @click.self="emit('close')"
   >
-    <section class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 animate-fadeIn">
+    <section class="modal-card">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-bold text-gray-900">{{ mode === 'login' ? '登录 JellyStudy' : '注册账号' }}</h3>
-        <button type="button" class="text-gray-400 hover:text-gray-600" @click="emit('close')">✕</button>
+        <h3 class="text-lg font-bold text-main">{{ mode === 'login' ? '登录 JellyStudy' : '注册账号' }}</h3>
+        <button type="button" class="icon-btn" @click="emit('close')">✕</button>
       </div>
 
-      <div class="flex gap-2 mb-4">
+      <div class="segment mb-4">
         <button
           type="button"
-          class="flex-1 py-2 rounded-lg text-sm font-medium"
-          :class="mode === 'login' ? 'bg-primary-100 text-primary-800' : 'bg-gray-100 text-gray-600'"
+          class="segment-item"
+          :class="{ 'segment-item-active': mode === 'login' }"
           @click="mode = 'login'"
         >登录</button>
         <button
           type="button"
-          class="flex-1 py-2 rounded-lg text-sm font-medium"
-          :class="mode === 'register' ? 'bg-primary-100 text-primary-800' : 'bg-gray-100 text-gray-600'"
+          class="segment-item"
+          :class="{ 'segment-item-active': mode === 'register' }"
           @click="mode = 'register'"
         >注册</button>
       </div>
 
       <form class="space-y-3" @submit.prevent="submit">
         <div>
-          <label class="text-xs text-gray-500">用户名</label>
+          <label class="text-xs text-muted">用户名</label>
           <input v-model="username" class="input w-full mt-1" placeholder="学号或用户名" required />
         </div>
         <div v-if="mode === 'register'">
-          <label class="text-xs text-gray-500">昵称（可选）</label>
+          <label class="text-xs text-muted">昵称（可选）</label>
           <input v-model="displayName" class="input w-full mt-1" placeholder="显示名称" />
         </div>
         <div>
-          <label class="text-xs text-gray-500">密码</label>
+          <label class="text-xs text-muted">密码</label>
           <input v-model="password" type="password" class="input w-full mt-1" placeholder="至少 6 位" required />
         </div>
         <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
@@ -97,7 +97,7 @@ const submit = async () => {
         </button>
       </form>
 
-      <p v-if="hint" class="text-xs text-gray-400 mt-4 text-center">
+      <p v-if="hint" class="text-xs text-faint mt-4 text-center">
         演示：{{ hint.demo }} · 学号：{{ hint.student }}
       </p>
     </section>

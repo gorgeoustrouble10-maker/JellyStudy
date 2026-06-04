@@ -1,0 +1,7 @@
+# Nacos 配置 — jellystudy-qa.yaml
+# Group: DEFAULT_GROUP  |  导入: scripts/import-nacos-config.ps1
+
+jellystudy:
+  redis:
+    recent-window-days: 7
+    question-cache-ttl-minutes: 30

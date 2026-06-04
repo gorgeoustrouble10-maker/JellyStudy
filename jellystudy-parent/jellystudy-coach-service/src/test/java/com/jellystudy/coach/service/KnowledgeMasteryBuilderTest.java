@@ -34,8 +34,9 @@ class KnowledgeMasteryBuilderTest {
     @Test
     void weakPointWithoutPracticeUsesDiagnosis() {
         var result = builder.build(List.of("Dubbo"), List.of("Dubbo"), List.of(), List.of());
-        assertEquals(55, result.get(0).getPercent());
+        assertEquals(45, result.get(0).getPercent());
         assertEquals("diagnosis", result.get(0).getSource());
+        assertEquals("待测评", result.get(0).getStatus());
     }
 
     @Test

@@ -48,10 +48,20 @@
 ## 6. 作业一（Docker + Nacos）
 
 - **双实例**：`docker-compose.services.yml` 中 `evaluate-1`(8083) + `evaluate-2`(8085)
-- **Nacos 配置**：`nacos-config/jellystudy-evaluate-service.yaml`、`jellystudy-coach-service.yaml`
-- **验证**：`GET /api/evaluations/instance-info` 查看实例 ID 与 Nacos 模型名
+- **Nacos 配置**（四个 Data ID）：
+  - `jellystudy-evaluate-service.yaml` — AI 模型参数
+  - `jellystudy-coach-service.yaml` — 成长积分规则
+  - `jellystudy-knowledge.yaml` — 知识点列表 `max-list-size`
+  - `jellystudy-qa.yaml` — Redis 榜 `recent-window-days`
+- **验证**：
+  - `GET /api/evaluations/instance-info` — 双实例 + 模型名
+  - `GET /api/coach/config`、`/api/knowledge-points/config`、`/api/questions/config`
 
-## 7. 启动顺序
+## 7. 与平台认证的关系
+
+Auth（登录/Token）由 Coach 进程托管，属于**平台基础设施**，不计入 JellyCoach 业务功能（F1–F8）。详见 **`docs/平台认证与JellyCoach模块边界.md`**（Layer A/B/C 划分、包级边界、答辩话术）。
+
+## 8. 启动顺序
 
 ```powershell
 docker compose -f docker-compose.core.yml up -d

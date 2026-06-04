@@ -1,15 +1,25 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { BookOpen, HelpCircle, MessageSquare, Brain, Wand2, Menu, X, LogOut } from 'lucide-vue-next'
-import KnowledgePointPanel from './components/KnowledgePointPanel.vue'
-import QuestionPanel from './components/QuestionPanel.vue'
-import AnswerPanel from './components/AnswerPanel.vue'
-import EvaluationPanel from './components/EvaluationPanel.vue'
-import CoachPanel from './components/CoachPanel.vue'
-import LoginModal from './components/LoginModal.vue'
 import { checkAllServices } from './services/healthCheck.js'
 import { userId, displayName, isLoggedIn, clearAuth, applyAuthSession } from './services/userContext.js'
 import { authAPI } from './services/api.js'
+import {
+  applyUiPreferences,
+  getStoredPreferences,
+  setUiPreference,
+  watchSystemTheme,
+  unwatchSystemTheme
+} from './composables/useUiTheme.js'
+import ThemePicker from './components/ThemePicker.vue'
+
+// Defer panel chunks until the tab is actually opened.
+const KnowledgePointPanel = defineAsyncComponent(() => import('./components/KnowledgePointPanel.vue'))
+const QuestionPanel = defineAsyncComponent(() => import('./components/QuestionPanel.vue'))
+const AnswerPanel = defineAsyncComponent(() => import('./components/AnswerPanel.vue'))
+const EvaluationPanel = defineAsyncComponent(() => import('./components/EvaluationPanel.vue'))
+const CoachPanel = defineAsyncComponent(() => import('./components/CoachPanel.vue'))
+const LoginModal = defineAsyncComponent(() => import('./components/LoginModal.vue'))
 
 const loginOpen = ref(false)
 
@@ -49,6 +59,8 @@ const tabFromHash = () => {
 
 const activeTab = ref(tabFromHash())
 const sidebarOpen = ref(false)
+const uiPrefs = ref(getStoredPreferences())
+const resolvedTheme = ref('light')
 const health = ref({ status: 'checking', label: '检测中…', results: [] })
 let healthTimer
 
@@ -100,7 +112,26 @@ const onHashChange = () => {
   activeTab.value = tabFromHash()
 }
 
+const syncThemeFromDom = () => {
+  resolvedTheme.value = document.documentElement.getAttribute('data-theme') || 'light'
+}
+
+const onThemeMode = (mode) => {
+  uiPrefs.value = setUiPreference('mode', mode, uiPrefs.value)
+  syncThemeFromDom()
+}
+
+const onThemeAccent = (accent) => {
+  uiPrefs.value = setUiPreference('accent', accent, uiPrefs.value)
+}
+
 onMounted(() => {
+  const applied = applyUiPreferences(uiPrefs.value)
+  uiPrefs.value = { mode: applied.mode, accent: applied.accent }
+  resolvedTheme.value = applied.resolved
+  watchSystemTheme((a) => {
+    resolvedTheme.value = a.resolved
+  })
   window.addEventListener('jellystudy:auth-required', onAuthRequired)
   if (!window.location.hash && activeTab.value !== 'knowledge') {
     setActiveTab(activeTab.value)
@@ -114,6 +145,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  unwatchSystemTheme()
   window.removeEventListener('hashchange', onHashChange)
   window.removeEventListener('jellystudy:auth-required', onAuthRequired)
   if (healthTimer) clearInterval(healthTimer)
@@ -122,23 +154,36 @@ onUnmounted(() => {
 const toggleSidebar = () => {
   sidebarOpen.value = !sidebarOpen.value
 }
+
 </script>
+
+<style scoped>
+.tab-fade-enter-active,
+.tab-fade-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.tab-fade-enter-from,
+.tab-fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+</style>
 
 <template>
   <!-- eslint-disable vue/no-multiple-template-root -->
-  <section class="min-h-screen bg-gray-50 flex">
+  <section class="min-h-screen flex bg-[rgb(var(--surface))]">
     <aside
-      class="fixed lg:sticky top-0 left-0 h-screen w-64 bg-white border-r border-gray-200 z-50 transform transition-transform duration-300 lg:translate-x-0"
+      class="shell-sidebar fixed lg:sticky top-0 left-0 h-screen w-64 border-r z-50 transform transition-transform duration-300 ease-out lg:translate-x-0"
       :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
     >
       <section class="p-6">
         <section class="flex items-center gap-3 mb-8">
-          <section class="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center">
+          <section class="brand-icon">
             <BookOpen class="w-6 h-6 text-white" />
           </section>
           <section>
-            <h1 class="text-xl font-bold text-gray-900">JellyStudy</h1>
-            <p class="text-xs text-gray-500">学习问答系统</p>
+            <h1 class="text-xl font-bold text-[rgb(var(--text))]">JellyStudy</h1>
+            <p class="text-xs text-[rgb(var(--text-muted))]">学习问答系统</p>
           </section>
         </section>
 
@@ -147,26 +192,32 @@ const toggleSidebar = () => {
             v-for="tab in tabs"
             :key="tab.id"
             @click="setActiveTab(tab.id)"
-            class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200"
-            :class="activeTab === tab.id
-              ? 'bg-primary-50 text-primary-700 font-semibold shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'"
+            class="nav-tab"
+            :class="activeTab === tab.id ? 'nav-tab-active' : 'nav-tab-idle'"
           >
             <component :is="tab.icon" class="w-5 h-5" />
             <span>{{ tab.name }}</span>
           </button>
         </nav>
 
-        <section class="mt-8 p-4 bg-gradient-to-br from-primary-50 to-blue-50 rounded-xl">
-          <p class="text-sm text-gray-600 mb-1">服务状态</p>
+        <ThemePicker
+          :mode="uiPrefs.mode"
+          :accent="uiPrefs.accent"
+          :resolved="resolvedTheme"
+          @update:mode="onThemeMode"
+          @update:accent="onThemeAccent"
+        />
+
+        <section class="health-card mt-4">
+          <p class="text-sm text-[rgb(var(--text-muted))] mb-1">服务状态</p>
           <section class="flex items-center gap-2" :title="healthTooltip()">
             <span
               class="w-2 h-2 rounded-full"
               :class="[healthDotClass(), health.status === 'connected' ? 'animate-pulse' : '']"
             />
-            <span class="text-sm font-medium text-gray-800">{{ health.label }}</span>
+            <span class="text-sm font-medium text-[rgb(var(--text))]">{{ health.label }}</span>
           </section>
-          <ul v-if="health.results.length" class="mt-2 space-y-1 text-xs text-gray-500">
+          <ul v-if="health.results.length" class="mt-2 space-y-1 text-xs text-[rgb(var(--text-muted))]">
             <li v-for="r in health.results" :key="r.key" class="flex items-center gap-1.5">
               <span class="w-1.5 h-1.5 rounded-full" :class="r.up ? 'bg-green-500' : 'bg-red-400'" />
               {{ r.displayLabel || r.label }}
@@ -182,22 +233,22 @@ const toggleSidebar = () => {
       class="fixed inset-0 bg-black/50 z-40 lg:hidden"
     />
 
-    <main class="flex-1 lg:ml-64">
-      <header class="sticky top-0 bg-white/80 backdrop-blur-md border-b border-gray-200 z-30">
+    <main class="flex-1 lg:ml-64 main-canvas">
+      <header class="shell-header">
         <section class="flex items-center justify-between px-6 py-4">
           <section class="flex items-center gap-4">
             <button
               @click="toggleSidebar"
-              class="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              class="lg:hidden p-2 rounded-lg transition-all duration-200 hover:bg-[rgb(var(--surface-muted))] active:scale-95"
             >
-              <Menu v-if="!sidebarOpen" class="w-6 h-6 text-gray-600" />
-              <X v-else class="w-6 h-6 text-gray-600" />
+              <Menu v-if="!sidebarOpen" class="w-6 h-6 text-muted" />
+              <X v-else class="w-6 h-6 text-muted" />
             </button>
             <section>
-              <h2 class="text-lg font-semibold text-gray-900">
+              <h2 class="text-lg font-semibold text-[rgb(var(--text))]">
                 {{ tabs.find(t => t.id === activeTab)?.name }}{{ activeTab === 'evaluation' ? '服务' : activeTab === 'coach' ? '' : '管理' }}
               </h2>
-              <p class="text-sm text-gray-500">
+              <p class="text-sm text-[rgb(var(--text-muted))]">
                 {{ activeTab === 'evaluation' ? '基于大模型的智能评估' : activeTab === 'coach' ? 'AI 学情诊断 · 巩固出题 · 知识宠物' : '高效管理您的学习资源' }}
               </p>
             </section>
@@ -205,8 +256,8 @@ const toggleSidebar = () => {
           <section class="flex items-center gap-3">
             <template v-if="isLoggedIn">
               <section class="hidden sm:flex flex-col items-end">
-                <span class="text-sm font-medium text-gray-800">{{ displayName || userId }}</span>
-                <span class="text-xs text-gray-400">@{{ userId }}</span>
+                <span class="text-sm font-medium text-[rgb(var(--text))]">{{ displayName || userId }}</span>
+                <span class="text-xs text-[rgb(var(--text-muted))]">@{{ userId }}</span>
               </section>
               <button
                 type="button"
@@ -227,15 +278,15 @@ const toggleSidebar = () => {
               登录 / 注册
             </button>
             <section
-              class="hidden sm:flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full"
+              class="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full bg-[rgb(var(--surface-muted))]"
               :title="healthTooltip()"
             >
               <span class="w-2 h-2 rounded-full" :class="healthDotClass()" />
-              <span class="text-sm text-gray-600">{{ health.label }}</span>
+              <span class="text-sm text-[rgb(var(--text-muted))]">{{ health.label }}</span>
             </section>
             <button
               type="button"
-              class="w-10 h-10 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center text-white font-semibold text-sm hover:opacity-90"
+              class="w-10 h-10 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center text-white font-semibold text-sm transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95"
               :title="isLoggedIn ? `当前用户: ${userId}` : '点击登录'"
               @click="isLoggedIn ? undefined : (loginOpen = true)"
             >
@@ -245,12 +296,16 @@ const toggleSidebar = () => {
         </section>
       </header>
 
-      <section class="p-6">
-        <KnowledgePointPanel v-if="activeTab === 'knowledge'" />
-        <QuestionPanel v-else-if="activeTab === 'question'" />
-        <AnswerPanel v-else-if="activeTab === 'answer'" />
-        <EvaluationPanel v-else-if="activeTab === 'evaluation'" />
-        <CoachPanel v-else-if="activeTab === 'coach'" />
+      <section class="p-6 relative z-[1]">
+        <Transition name="tab-fade" mode="out-in">
+          <div :key="activeTab" class="animate-fadeSlide">
+            <KnowledgePointPanel v-if="activeTab === 'knowledge'" />
+            <QuestionPanel v-else-if="activeTab === 'question'" />
+            <AnswerPanel v-else-if="activeTab === 'answer'" />
+            <EvaluationPanel v-else-if="activeTab === 'evaluation'" />
+            <CoachPanel v-else-if="activeTab === 'coach'" />
+          </div>
+        </Transition>
       </section>
     </main>
 

@@ -1,7 +1,7 @@
 package com.jellystudy.coach.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jellystudy.coach.exception.ApiResponse;
+import com.jellystudy.common.api.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;

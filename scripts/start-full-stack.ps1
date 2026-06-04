@@ -1,25 +1,12 @@
 # 全栈启动：基础设施已由 Docker 拉起后，启动 5 个 Java 服务 + evaluate-2 双实例 + Gateway dual 负载 + 提示前端
 $ErrorActionPreference = "Stop"
-$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+. (Join-Path $PSScriptRoot "lib\project-env.ps1")
+
+$projectRoot = Import-ProjectSecrets -ProjectRoot (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+Write-DashscopeCoachHint
 $logDir = Join-Path $projectRoot "logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-
-$secretsBat = Join-Path $projectRoot "local-secrets.bat"
-if (Test-Path $secretsBat) {
-    Get-Content $secretsBat -Encoding UTF8 | ForEach-Object {
-        if ($_ -match '^\s*set\s+(\w+)=(.*)$') {
-            Set-Item -Path "env:$($Matches[1])" -Value $Matches[2].Trim()
-        }
-    }
-}
-
-$env:REDIS_PASSWORD = if ($env:REDIS_PASSWORD) { $env:REDIS_PASSWORD } else { "jellystudy_redis" }
-$env:NACOS_USERNAME = if ($env:NACOS_USERNAME) { $env:NACOS_USERNAME } else { "nacos" }
-$env:NACOS_PASSWORD = if ($env:NACOS_PASSWORD) { $env:NACOS_PASSWORD } else { "nacos" }
-$env:MYSQL_PASSWORD = if ($env:MYSQL_PASSWORD) { $env:MYSQL_PASSWORD } else { "123456" }
-Remove-Item Env:SERVER_PORT -ErrorAction SilentlyContinue
-Remove-Item Env:INSTANCE_ID -ErrorAction SilentlyContinue
-Remove-Item Env:DUBBO_PROTOCOL_PORT -ErrorAction SilentlyContinue
+Clear-JavaServiceEnvOverrides
 
 & (Join-Path $PSScriptRoot "start-java-services.ps1")
 
@@ -35,7 +22,12 @@ if (-not (Get-NetTCPConnection -LocalPort 8085 -State Listen -ErrorAction Silent
     if (Test-Path $agentJar) {
         $agentPart = "-javaagent:$agentJar -Dskywalking.collector.backend_service=127.0.0.1:11800 -Dskywalking.agent.service_name=jellystudy-evaluate-2 "
     }
-    $eval2Cmd = "set INSTANCE_ID=evaluate-2&& set SERVER_PORT=8085&& set DUBBO_PROTOCOL_PORT=50055&& java $agentPart-jar $evalJarRel"
+    $eval2Java = "$agentPart-jar $evalJarRel"
+    $eval2Cmd = New-JavaServiceCmd -ProjectRoot $projectRoot -WorkDir $evaluate2Dir -JavaArgs $eval2Java -ExtraEnv @{
+        INSTANCE_ID = "evaluate-2"
+        SERVER_PORT = "8085"
+        DUBBO_PROTOCOL_PORT = "50055"
+    }
     Start-Process cmd.exe -ArgumentList @("/c", $eval2Cmd) `
         -WorkingDirectory $evaluate2Dir `
         -RedirectStandardOutput (Join-Path $logDir "evaluate-2.out.log") `
@@ -52,10 +44,8 @@ Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue
 Start-Sleep 2
 $gwDir = Join-Path $projectRoot "jellystudy-parent\jellystudy-gateway"
 $gwJarRel = "target\jellystudy-gateway-1.0.0-SNAPSHOT.jar"
-Remove-Item Env:SERVER_PORT -ErrorAction SilentlyContinue
-Remove-Item Env:INSTANCE_ID -ErrorAction SilentlyContinue
-Remove-Item Env:DUBBO_PROTOCOL_PORT -ErrorAction SilentlyContinue
-$gwCmd = "set SERVER_PORT=8080&& java -jar $gwJarRel --spring.profiles.active=dual"
+Clear-JavaServiceEnvOverrides
+$gwCmd = New-JavaServiceCmd -ProjectRoot $projectRoot -WorkDir $gwDir -JavaArgs "-jar $gwJarRel --spring.profiles.active=dual" -ExtraEnv @{ SERVER_PORT = "8080" }
 Start-Process cmd.exe -ArgumentList @("/c", $gwCmd) `
     -WorkingDirectory $gwDir `
     -RedirectStandardOutput (Join-Path $logDir "gateway-dual.out.log") `
@@ -70,6 +60,8 @@ Write-Host "Gateway:   http://127.0.0.1:8080/api/gateway/ping"
 Write-Host "instance:  http://127.0.0.1:8083/api/evaluations/instance-info"
 Write-Host "           http://127.0.0.1:8085/api/evaluations/instance-info"
 Write-Host "Coach配置: http://127.0.0.1:8084/api/coach/config"
+Write-Host "Knowledge: http://127.0.0.1:8081/api/knowledge-points/config"
+Write-Host "QA配置:    http://127.0.0.1:8082/api/questions/config"
 Write-Host "Nacos:     http://127.0.0.1:8848/nacos"
 Write-Host "SkyWalking:http://127.0.0.1:8090/"
 Write-Host "验证脚本:  powershell -File scripts\verify-z12-demo.ps1"

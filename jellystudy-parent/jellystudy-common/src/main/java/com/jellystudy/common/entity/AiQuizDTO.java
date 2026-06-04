@@ -26,4 +26,6 @@ public class AiQuizDTO implements Serializable {
     private Date createdAt;
     /** 提交练习后的打卡提示（可选） */
     private String checkInMessage;
+    /** 批改是否未走千问（规则/模板降级） */
+    private boolean aiDegraded;
 }

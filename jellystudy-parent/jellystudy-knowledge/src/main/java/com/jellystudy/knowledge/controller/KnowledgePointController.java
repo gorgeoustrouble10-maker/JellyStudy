@@ -1,13 +1,15 @@
 package com.jellystudy.knowledge.controller;
 
 import com.jellystudy.common.entity.KnowledgePointDTO;
-import com.jellystudy.knowledge.exception.ApiResponse;
+import com.jellystudy.knowledge.config.KnowledgeListProperties;
+import com.jellystudy.common.api.ApiResponse;
 import com.jellystudy.knowledge.service.KnowledgePointServiceImpl;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 知识点 HTTP 接口（本进程 ServiceImpl；能力通过 @DubboService 注册到 Nacos）
@@ -17,9 +19,19 @@ import java.util.List;
 public class KnowledgePointController {
 
     private final KnowledgePointServiceImpl knowledgePointService;
+    private final KnowledgeListProperties listProperties;
 
-    public KnowledgePointController(KnowledgePointServiceImpl knowledgePointService) {
+    public KnowledgePointController(KnowledgePointServiceImpl knowledgePointService,
+                                    KnowledgeListProperties listProperties) {
         this.knowledgePointService = knowledgePointService;
+        this.listProperties = listProperties;
+    }
+
+    @GetMapping("/config")
+    public ResponseEntity<Map<String, Object>> runtimeConfig() {
+        return ResponseEntity.ok(Map.of(
+                "maxListSize", listProperties.getMaxListSize(),
+                "source", "Nacos knowledge.list.max-list-size（@RefreshScope 热更新）"));
     }
 
     @GetMapping

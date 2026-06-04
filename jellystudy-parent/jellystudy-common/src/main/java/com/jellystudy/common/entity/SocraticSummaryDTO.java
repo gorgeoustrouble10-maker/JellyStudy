@@ -29,4 +29,7 @@ public class SocraticSummaryDTO implements Serializable {
     private String summaryMarkdown;
     private Integer evaluateScore;
     private String evaluateGrade;
+    /** 总结是否因千问失败而降级 */
+    private boolean summaryDegraded;
+    private String aiSource;
 }

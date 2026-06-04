@@ -2,13 +2,15 @@ package com.jellystudy.qa.controller;
 
 import com.jellystudy.common.auth.JellystudyUserAttributes;
 import com.jellystudy.common.entity.QuestionDTO;
-import com.jellystudy.qa.exception.ApiResponse;
+import com.jellystudy.qa.config.JellystudyRedisProperties;
+import com.jellystudy.common.api.ApiResponse;
 import com.jellystudy.qa.service.QuestionServiceImpl;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 问题 HTTP 接口（本进程 ServiceImpl；跨服务见 {@code @DubboReference}）
@@ -18,9 +20,22 @@ import java.util.List;
 public class QuestionController {
 
     private final QuestionServiceImpl questionService;
+    private final JellystudyRedisProperties redisProperties;
 
-    public QuestionController(QuestionServiceImpl questionService) {
+    public QuestionController(QuestionServiceImpl questionService,
+                              JellystudyRedisProperties redisProperties) {
         this.questionService = questionService;
+        this.redisProperties = redisProperties;
+    }
+
+    @GetMapping("/config")
+    public ResponseEntity<Map<String, Object>> runtimeConfig() {
+        return ResponseEntity.ok(Map.of(
+                "recentWindowDays", redisProperties.getRecentWindowDays(),
+                "questionCacheTtlMinutes", redisProperties.getQuestionCacheTtlMinutes(),
+                "hotKey", redisProperties.getHotKey(),
+                "viewRankKey", redisProperties.getViewRankKey(),
+                "source", "Nacos jellystudy.redis.*（@RefreshScope 热更新）"));
     }
 
     @GetMapping
